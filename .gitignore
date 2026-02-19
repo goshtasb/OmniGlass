@@ -1,0 +1,37 @@
+# Rust
+target/
+**/*.rs.bk
+*.pdb
+
+# Node
+node_modules/
+dist/
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/
+*.sublime-*
+
+# Tauri generated files
+src-tauri/gen/
+
+# Environment / secrets
+.env
+.env.*
+
+# OCR bench compiled Swift helper (rebuilt on first run)
+tools/ocr-bench/swift-src/ocr-helper
+tools/ocr-bench/generated/
+
+# Benchmark outputs
+*.csv
+
+# Lock files are committed (Cargo.lock, package-lock.json)
+
+# Claude Code
+.claude/
