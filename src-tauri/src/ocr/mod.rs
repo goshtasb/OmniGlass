@@ -1,29 +1,25 @@
-//! OCR domain — Apple Vision Framework via swift-bridge FFI.
+//! OCR domain — platform-abstracted text recognition.
 //!
-//! Wraps the Swift OCR bridge for use in the Tauri app pipeline.
-//! External code should only use the public functions here.
+//! Dispatches to the appropriate platform backend:
+//! - macOS: Apple Vision Framework via swift-bridge FFI
+//! - Windows: Windows.Media.Ocr via windows-rs (WinRT)
+//!
+//! External code uses the public functions here — the platform
+//! backend is selected at compile time via #[cfg(target_os)].
 
 pub mod heuristics;
 
-#[swift_bridge::bridge]
-mod ffi {
-    #[swift_bridge(swift_repr = "struct")]
-    struct OcrResult {
-        text: String,
-        char_count: i64,
-        latency_ms: f64,
-        confidence: f64,
-        recognition_level: String,
-    }
+#[cfg(target_os = "macos")]
+mod apple_vision;
 
-    extern "Swift" {
-        fn run_ocr_on_path(path: String, level: i32) -> OcrResult;
-        fn run_ocr_on_png_data(data: Vec<u8>, level: i32) -> OcrResult;
-        fn warm_up_vision();
-    }
-}
+#[cfg(target_os = "windows")]
+mod windows_ocr;
 
-/// Recognition level for Apple Vision text recognition.
+/// Recognition level for text recognition.
+///
+/// Maps to VNRequestTextRecognitionLevel on macOS.
+/// On Windows, both levels use the same WinRT engine
+/// (Windows.Media.Ocr doesn't expose accuracy levels).
 #[derive(Debug, Clone, Copy)]
 pub enum RecognitionLevel {
     Accurate = 0,
@@ -36,7 +32,7 @@ impl Default for RecognitionLevel {
     }
 }
 
-/// Result of OCR processing, converted from the FFI type.
+/// Result of OCR processing — platform-independent.
 #[derive(Debug, Clone)]
 pub struct OcrOutput {
     pub text: String,
@@ -46,32 +42,36 @@ pub struct OcrOutput {
     pub recognition_level: String,
 }
 
-/// Run OCR on an image file and return extracted text with metadata.
-pub fn recognize_text(image_path: &str, level: RecognitionLevel) -> OcrOutput {
-    let result = ffi::run_ocr_on_path(image_path.to_string(), level as i32);
-    OcrOutput {
-        text: result.text,
-        char_count: result.char_count,
-        latency_ms: result.latency_ms,
-        confidence: result.confidence,
-        recognition_level: result.recognition_level,
-    }
-}
-
 /// Run OCR on in-memory PNG bytes. Eliminates disk I/O from the pipeline.
+///
+/// Dispatches to Apple Vision (macOS) or Windows.Media.Ocr (Windows).
 pub fn recognize_text_from_bytes(png_bytes: Vec<u8>, level: RecognitionLevel) -> OcrOutput {
-    let result = ffi::run_ocr_on_png_data(png_bytes, level as i32);
-    OcrOutput {
-        text: result.text,
-        char_count: result.char_count,
-        latency_ms: result.latency_ms,
-        confidence: result.confidence,
-        recognition_level: result.recognition_level,
+    #[cfg(target_os = "macos")]
+    {
+        apple_vision::recognize_text_from_bytes(png_bytes, level)
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        windows_ocr::recognize_text_from_bytes(png_bytes, level)
     }
 }
 
-/// Warm up Vision Framework with a throwaway recognition request.
-/// Call once at startup to avoid cold-start penalty on first snip.
+/// Run OCR on an image file and return extracted text with metadata.
+///
+/// Only available on macOS (Apple Vision supports path-based input).
+/// On Windows, load the file bytes and use recognize_text_from_bytes instead.
+#[cfg(target_os = "macos")]
+pub fn recognize_text(image_path: &str, level: RecognitionLevel) -> OcrOutput {
+    apple_vision::recognize_text(image_path, level)
+}
+
+/// Warm up the OCR engine to avoid cold-start penalty on first snip.
+/// Call once at startup.
 pub fn warm_up() {
-    ffi::warm_up_vision();
+    #[cfg(target_os = "macos")]
+    apple_vision::warm_up();
+
+    #[cfg(target_os = "windows")]
+    windows_ocr::warm_up();
 }

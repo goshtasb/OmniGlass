@@ -11,7 +11,6 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
-swift-bridge-build = "0.1"
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "macos-private-api", "protocol-asset"] }
@@ -24,10 +23,25 @@ base64 = "0.22"
 log = "0.4"
 env_logger = "0.11"
 thiserror = "2"
-swift-bridge = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 arboard = "3"
 keyring = "3"
+
+# ── macOS-only: Swift bridge for Apple Vision OCR ──
+[target.'cfg(target_os = "macos")'.build-dependencies]
+swift-bridge-build = "0.1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+swift-bridge = "0.1"
+
+# ── Windows-only: WinRT bindings for Windows.Media.Ocr ──
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = [
+    "Foundation",
+    "Media_Ocr",
+    "Graphics_Imaging",
+    "Storage_Streams",
+] }
 
 # Optimize image-heavy crates in dev builds.
 # Without this, to_rgb8() and PNG encoding take ~1800ms in debug mode
