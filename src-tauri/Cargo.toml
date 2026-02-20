@@ -29,6 +29,7 @@ keyring = "3"
 regex = "1"
 dirs = "5"
 dotenvy = "0.15"
+tauri-plugin-dialog = "2.6.0"
 
 # ── macOS-only: Swift bridge for Apple Vision OCR ──
 [target.'cfg(target_os = "macos")'.build-dependencies]

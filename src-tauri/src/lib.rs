@@ -423,6 +423,22 @@ fn write_to_desktop(filename: String, content: String) -> Result<String, String>
     Ok(full_path)
 }
 
+/// Tauri command: write file to a user-chosen path (from save dialog).
+///
+/// The frontend shows a native save-file picker and passes the chosen path here.
+#[tauri::command]
+fn write_file_to_path(file_path: String, content: String) -> Result<String, String> {
+    if !safety::command_check::is_path_safe(&file_path) {
+        return Err("Unsafe file path".to_string());
+    }
+
+    std::fs::write(&file_path, &content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    log::info!("[EXPORT] Wrote file: {}", file_path);
+    Ok(file_path)
+}
+
 /// Tauri command: get the current ActionMenu data.
 ///
 /// Called by the action-menu window on load.
@@ -681,6 +697,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(CaptureState::new())
         .manage(llm::ActionMenuState::new())
         .invoke_handler(tauri::generate_handler![
@@ -695,6 +712,7 @@ pub fn run() {
             execute_action,
             run_confirmed_command,
             write_to_desktop,
+            write_file_to_path,
             get_provider_config,
             set_active_provider,
             save_api_key,

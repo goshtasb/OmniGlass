@@ -18,6 +18,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, emit } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-shell";
+import { save } from "@tauri-apps/plugin-dialog";
 import { WebviewWindow, getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 
@@ -470,13 +471,29 @@ function renderMarkdownLight(text: string): string {
 async function handleFileResult(result: ActionResult): Promise<void> {
   const content = result.result.text || "";
   const filename = result.result.filePath || "export.csv";
+  const ext = filename.split(".").pop() || "csv";
 
   try {
-    const fullPath = await invoke<string>("write_to_desktop", {
-      filename,
+    // Show native save dialog — user picks location and filename
+    const chosenPath = await save({
+      defaultPath: filename,
+      filters: [{ name: ext.toUpperCase(), extensions: [ext] }],
+    });
+
+    if (!chosenPath) {
+      // User cancelled the dialog
+      actionInProgress = false;
+      return;
+    }
+
+    await invoke<string>("write_file_to_path", {
+      filePath: chosenPath,
       content,
     });
-    console.log(`[ACTION] File written to: ${fullPath}`);
+    console.log(`[ACTION] File written to: ${chosenPath}`);
+
+    // Extract just the filename for display
+    const savedName = chosenPath.split("/").pop() || filename;
 
     // Show success panel in-place (no auto-close)
     const actionsEl = document.getElementById("menu-actions");
@@ -484,7 +501,7 @@ async function handleFileResult(result: ActionResult): Promise<void> {
       actionsEl.innerHTML = `
         <div style="padding: 16px 14px; text-align: center;">
           <div style="color: #4ade80; font-size: 14px; font-weight: 600; margin-bottom: 6px;">
-            Saved to Desktop
+            File saved
           </div>
           <div style="
             color: rgba(255,255,255,0.7);
@@ -495,7 +512,7 @@ async function handleFileResult(result: ActionResult): Promise<void> {
             border-radius: 4px;
             margin-bottom: 12px;
             word-break: break-all;
-          ">${escapeHtml(filename)}</div>
+          ">${escapeHtml(savedName)}</div>
           <div style="display: flex; gap: 8px; justify-content: center;">
             <button id="btn-open-file" style="
               background: rgba(74,222,128,0.15);
@@ -520,7 +537,7 @@ async function handleFileResult(result: ActionResult): Promise<void> {
       `;
 
       document.getElementById("btn-open-file")?.addEventListener("click", async () => {
-        try { await open(fullPath); } catch { /* best effort */ }
+        try { await open(chosenPath); } catch { /* best effort */ }
         try { await invoke("close_action_menu"); } catch { /* closing */ }
       });
 
@@ -529,7 +546,7 @@ async function handleFileResult(result: ActionResult): Promise<void> {
       });
     }
   } catch (err) {
-    showFeedback(`File write failed: ${err}`, true);
+    showFeedback(`File export failed: ${err}`, true);
   }
 }
 

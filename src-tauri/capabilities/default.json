@@ -22,6 +22,7 @@
     "shell:allow-open",
     "core:webview:allow-create-webview-window",
     "core:event:allow-emit",
-    "core:event:allow-listen"
+    "core:event:allow-listen",
+    "dialog:allow-save"
   ]
 }
