@@ -1,32 +1,13 @@
-//! CLASSIFY pipeline — sends OCR text to Claude API via streaming SSE.
+//! Anthropic Claude CLASSIFY pipeline — streaming SSE.
 //!
 //! Streams the response and emits Tauri events as data becomes available:
 //! - "action-menu-skeleton" at TTFT (~300ms) with contentType + summary
 //! - "action-menu-complete" when the full ActionMenu JSON is parsed
 
 use super::prompts::{self, CLASSIFY_SYSTEM_PROMPT, MAX_TOKENS, MODEL};
+use super::streaming;
 use super::types::{ActionMenu, ActionMenuSkeleton};
 use tauri::Emitter;
-
-/// Strip markdown code fences from LLM response text.
-/// Claude often wraps JSON in ```json ... ``` despite being told not to.
-fn strip_code_fences(text: &str) -> String {
-    let trimmed = text.trim();
-    if trimmed.starts_with("```") {
-        let after_open = match trimmed.find('\n') {
-            Some(pos) => &trimmed[pos + 1..],
-            None => trimmed,
-        };
-        let stripped = after_open.trim_end();
-        if stripped.ends_with("```") {
-            stripped[..stripped.len() - 3].trim().to_string()
-        } else {
-            after_open.trim().to_string()
-        }
-    } else {
-        trimmed.to_string()
-    }
-}
 
 /// Call Claude API with streaming to classify OCR text.
 ///
@@ -121,7 +102,7 @@ pub async fn classify_streaming(
                 sse_buffer.push_str(&String::from_utf8_lossy(&chunk));
 
                 // Process complete SSE events (separated by \n\n)
-                let events = parse_sse_events(&mut sse_buffer);
+                let events = streaming::parse_sse_events(&mut sse_buffer);
                 for (event_type, data) in events {
                     match event_type.as_str() {
                         "content_block_delta" => {
@@ -138,7 +119,7 @@ pub async fn classify_streaming(
                                 // Try to extract skeleton from partial JSON
                                 if !skeleton_emitted {
                                     if let Some((ct, summary)) =
-                                        try_extract_skeleton(&accumulated_text)
+                                        streaming::try_extract_skeleton(&accumulated_text)
                                     {
                                         let skeleton = ActionMenuSkeleton {
                                             content_type: ct,
@@ -202,7 +183,7 @@ pub async fn classify_streaming(
     log::info!("[LLM] Stream complete: {}ms", api_ms);
 
     // Parse the full accumulated text as ActionMenu
-    let json_str = strip_code_fences(&accumulated_text);
+    let json_str = streaming::strip_code_fences(&accumulated_text);
     let menu = match serde_json::from_str::<ActionMenu>(&json_str) {
         Ok(menu) => {
             log::info!("[LLM] Parse result: success");
@@ -228,81 +209,10 @@ pub async fn classify_streaming(
     menu
 }
 
-/// Parse complete SSE events from the buffer.
-/// Returns (event_type, data) pairs. Removes processed events from buffer.
-fn parse_sse_events(buffer: &mut String) -> Vec<(String, String)> {
-    let mut events = Vec::new();
-
-    while let Some(pos) = buffer.find("\n\n") {
-        let event_block = buffer[..pos].to_string();
-        *buffer = buffer[pos + 2..].to_string();
-
-        let mut event_type = String::new();
-        let mut data = String::new();
-
-        for line in event_block.lines() {
-            if let Some(val) = line.strip_prefix("event: ") {
-                event_type = val.trim().to_string();
-            } else if let Some(val) = line.strip_prefix("data: ") {
-                data = val.to_string();
-            }
-        }
-
-        if !event_type.is_empty() {
-            events.push((event_type, data));
-        }
-    }
-
-    events
-}
-
-/// Extract the text delta from a content_block_delta SSE data payload.
+/// Extract the text delta from an Anthropic content_block_delta SSE data payload.
 fn extract_text_delta(data: &str) -> Option<String> {
     let json: serde_json::Value = serde_json::from_str(data).ok()?;
     json["delta"]["text"].as_str().map(|s| s.to_string())
-}
-
-/// Try to extract contentType and summary from partially accumulated JSON.
-/// Works by finding the first '{' and looking for complete string values.
-fn try_extract_skeleton(accumulated: &str) -> Option<(String, String)> {
-    let json_start = accumulated.find('{')?;
-    let json_text = &accumulated[json_start..];
-
-    let content_type = extract_json_string_value(json_text, "contentType")?;
-    let summary = extract_json_string_value(json_text, "summary")?;
-    Some((content_type, summary))
-}
-
-/// Extract a string value for a given key from partial JSON text.
-/// Returns None if the key isn't found or the value isn't complete yet.
-fn extract_json_string_value(text: &str, key: &str) -> Option<String> {
-    let pattern = format!("\"{}\"", key);
-    let key_pos = text.find(&pattern)?;
-    let rest = &text[key_pos + pattern.len()..];
-
-    // Skip whitespace, colon, whitespace
-    let rest = rest.trim_start();
-    let rest = rest.strip_prefix(':')?;
-    let rest = rest.trim_start();
-
-    // Must start with opening quote
-    let rest = rest.strip_prefix('"')?;
-
-    // Find closing unescaped quote
-    let bytes = rest.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'\\' {
-            i += 2; // skip escaped character
-            continue;
-        }
-        if bytes[i] == b'"' {
-            return Some(rest[..i].to_string());
-        }
-        i += 1;
-    }
-
-    None // Closing quote not found — value still streaming
 }
 
 /// Non-streaming classify (kept as fallback, not used in main pipeline).
@@ -393,7 +303,7 @@ pub async fn classify(
         }
     };
 
-    let json_str = strip_code_fences(text_content);
+    let json_str = streaming::strip_code_fences(text_content);
 
     match serde_json::from_str::<ActionMenu>(&json_str) {
         Ok(menu) => {

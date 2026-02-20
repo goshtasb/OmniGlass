@@ -15,8 +15,13 @@ use tauri::{
 /// Left-click: triggers screen capture (snip mode).
 /// Right-click: opens context menu with Quit option.
 pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let settings_item = MenuItemBuilder::with_id("settings", "Settings...").build(app)?;
     let quit_item = MenuItemBuilder::with_id("quit", "Quit Omni-Glass").build(app)?;
-    let menu = MenuBuilder::new(app).item(&quit_item).build()?;
+    let menu = MenuBuilder::new(app)
+        .item(&settings_item)
+        .separator()
+        .item(&quit_item)
+        .build()?;
 
     // Decode the PNG icon to RGBA for Tauri's Image type
     let icon_bytes = include_bytes!("../icons/32x32.png");
@@ -52,7 +57,23 @@ pub fn setup_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .on_menu_event(|app, event| {
-            if event.id() == "quit" {
+            if event.id() == "settings" {
+                log::info!("Settings requested from tray menu");
+                // Open settings window — reuse the Tauri command logic
+                if let Some(window) = app.get_webview_window("settings") {
+                    let _ = window.set_focus();
+                } else {
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        app,
+                        "settings",
+                        tauri::WebviewUrl::App("settings.html".into()),
+                    )
+                    .title("Omni-Glass Settings")
+                    .inner_size(520.0, 500.0)
+                    .resizable(true)
+                    .build();
+                }
+            } else if event.id() == "quit" {
                 log::info!("Quit requested from tray menu");
                 app.exit(0);
             }

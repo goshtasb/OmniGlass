@@ -27,6 +27,7 @@ thiserror = "2"
 swift-bridge = "0.1"
 reqwest = { version = "0.12", features = ["json"] }
 arboard = "3"
+keyring = "3"
 
 # Optimize image-heavy crates in dev builds.
 # Without this, to_rgb8() and PNG encoding take ~1800ms in debug mode
