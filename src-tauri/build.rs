@@ -7,27 +7,32 @@
 //!
 //! All generated files go to OUT_DIR (inside target/) to avoid triggering
 //! Tauri's file watcher on every build.
-
-use std::path::PathBuf;
+//!
+//! IMPORTANT: The Swift bridge code is behind #[cfg(target_os = "macos")].
+//! A runtime `if` check is NOT sufficient — the compiler must not see the
+//! swift_bridge_build symbol at all on non-macOS hosts, because the crate
+//! isn't a build-dependency on those platforms.
 
 fn main() {
     // Phase 1: Tauri (all platforms)
     tauri_build::build();
 
-    // Phase 2: Platform-specific OCR build
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
-
-    if target_os == "macos" {
-        build_swift_ocr_bridge();
-    }
-    // Windows: no extra build steps needed — windows-rs generates bindings at compile time
+    // Phase 2: macOS-only Swift OCR bridge
+    #[cfg(target_os = "macos")]
+    build_swift_ocr_bridge();
 }
 
 /// Build the Swift OCR bridge for macOS.
 ///
 /// Uses swift-bridge to generate Rust↔Swift FFI glue, compiles the Swift
 /// source into a static library, and links it with Apple frameworks.
+///
+/// Gated with #[cfg(target_os = "macos")] so the compiler never resolves
+/// swift_bridge_build on Windows/Linux hosts.
+#[cfg(target_os = "macos")]
 fn build_swift_ocr_bridge() {
+    use std::path::PathBuf;
+
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
     let swift_src_dir = manifest_dir.join("swift-src");
