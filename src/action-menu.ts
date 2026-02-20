@@ -304,4 +304,13 @@ document.addEventListener("keydown", async (e: KeyboardEvent) => {
   }
 });
 
+// Click outside (window blur) closes the menu
+window.addEventListener("blur", async () => {
+  try {
+    await invoke("close_action_menu");
+  } catch {
+    // Window might already be closing
+  }
+});
+
 init();

@@ -208,6 +208,12 @@ pub async fn classify_streaming(
             log::info!("[LLM] Parse result: success");
             log::info!("[LLM] Content type: {}", menu.content_type);
             log::info!("[LLM] Actions: {}", menu.actions.len());
+            for action in &menu.actions {
+                log::info!(
+                    "[LLM]   #{} {} ({}): {}",
+                    action.priority, action.label, action.id, action.description
+                );
+            }
             menu
         }
         Err(e) => {
