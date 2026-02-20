@@ -585,6 +585,22 @@ fn has_api_key(provider_id: &str) -> bool {
 /// Entry point — called by Tauri runtime.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env.local → .env from project root.
+    // Checks both cwd (standalone) and parent (cargo run from src-tauri/).
+    // Won't override existing env vars, so `export ANTHROPIC_API_KEY=...` still works.
+    'env_load: for env_file in [".env.local", ".env"] {
+        for base in [".", ".."] {
+            let path = std::path::Path::new(base).join(env_file);
+            if path.exists() {
+                match dotenvy::from_path(&path) {
+                    Ok(_) => eprintln!("[STARTUP] Loaded {} from {}/", env_file, base),
+                    Err(e) => eprintln!("[STARTUP] Failed to load {}: {}", env_file, e),
+                }
+                break 'env_load;
+            }
+        }
+    }
+
     env_logger::init();
 
     tauri::Builder::default()

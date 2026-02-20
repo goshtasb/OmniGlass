@@ -28,6 +28,7 @@ arboard = "3"
 keyring = "3"
 regex = "1"
 dirs = "5"
+dotenvy = "0.15"
 
 # ── macOS-only: Swift bridge for Apple Vision OCR ──
 [target.'cfg(target_os = "macos")'.build-dependencies]
