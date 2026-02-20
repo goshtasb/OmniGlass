@@ -24,6 +24,7 @@ This project uses a modular engineering standards system located in `standards/`
 3. **Cross-domain imports only through `api/`** — Never import from another domain's `logic/`, `data/`, or `ui/`.
 4. **Co-located documentation** — Each module has its own `README.md`.
 5. **Functional Core, Imperative Shell** — Pure business logic has zero I/O dependencies.
+6. **Continuous Documentation** — Maintain high-quality, modular documentation alongside code throughout the entire development lifecycle, not as a deferred phase. The codebase should be self-describing at every commit so the source of truth is always current.
 
 ---
 
