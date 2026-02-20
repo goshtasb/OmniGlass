@@ -476,9 +476,58 @@ async function handleFileResult(result: ActionResult): Promise<void> {
       filename,
       content,
     });
-    showFeedback(`Saved: ${filename}`);
     console.log(`[ACTION] File written to: ${fullPath}`);
-    closeAfterDelay(1500);
+
+    // Show success panel in-place (no auto-close)
+    const actionsEl = document.getElementById("menu-actions");
+    if (actionsEl) {
+      actionsEl.innerHTML = `
+        <div style="padding: 16px 14px; text-align: center;">
+          <div style="color: #4ade80; font-size: 14px; font-weight: 600; margin-bottom: 6px;">
+            Saved to Desktop
+          </div>
+          <div style="
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+            font-family: 'SF Mono', Menlo, monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 6px 10px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            word-break: break-all;
+          ">${escapeHtml(filename)}</div>
+          <div style="display: flex; gap: 8px; justify-content: center;">
+            <button id="btn-open-file" style="
+              background: rgba(74,222,128,0.15);
+              border: 1px solid rgba(74,222,128,0.4);
+              color: #4ade80;
+              padding: 5px 14px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 12px;
+            ">Open File</button>
+            <button id="btn-close-file" style="
+              background: transparent;
+              border: 1px solid rgba(255,255,255,0.2);
+              color: rgba(255,255,255,0.7);
+              padding: 5px 14px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 12px;
+            ">Done</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("btn-open-file")?.addEventListener("click", async () => {
+        try { await open(fullPath); } catch { /* best effort */ }
+        try { await invoke("close_action_menu"); } catch { /* closing */ }
+      });
+
+      document.getElementById("btn-close-file")?.addEventListener("click", async () => {
+        try { await invoke("close_action_menu"); } catch { /* closing */ }
+      });
+    }
   } catch (err) {
     showFeedback(`File write failed: ${err}`, true);
   }
