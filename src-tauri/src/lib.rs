@@ -10,6 +10,7 @@
 mod capture;
 mod llm;
 mod ocr;
+mod safety;
 mod tray;
 
 use capture::CaptureState;
@@ -258,6 +259,93 @@ fn close_action_menu(app: tauri::AppHandle) -> Result<(), String> {
         window.close().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+// ── Execute pipeline commands ─────────────────────────────────────
+
+/// Tauri command: execute an action on the stored OCR text.
+///
+/// Called by the action menu when the user clicks an action that
+/// requires LLM execution (explain_error, suggest_fix, export_csv, etc.).
+/// Returns an ActionResult JSON to the frontend.
+#[tauri::command]
+async fn execute_action(
+    state: tauri::State<'_, llm::ActionMenuState>,
+    action_id: String,
+) -> Result<llm::ActionResult, String> {
+    let ocr_text = {
+        let guard = state.ocr_text.lock().map_err(|e| e.to_string())?;
+        guard
+            .clone()
+            .ok_or("No OCR text available — snip first".to_string())?
+    };
+
+    log::info!("[EXECUTE] Starting action: {}", action_id);
+    let result = llm::execute_action_anthropic(&action_id, &ocr_text).await;
+    log::info!(
+        "[EXECUTE] Complete: status={}, type={}",
+        result.status,
+        result.result.result_type
+    );
+
+    Ok(result)
+}
+
+/// Tauri command: run a confirmed shell command.
+///
+/// Only called after the user explicitly clicks "Run" in the confirmation
+/// dialog. Runs the command via the default shell and returns its output.
+#[tauri::command]
+async fn run_confirmed_command(command: String) -> Result<String, String> {
+    // Double-check safety before executing
+    let check = safety::command_check::is_command_safe(&command);
+    if !check.safe {
+        return Err(format!(
+            "Command blocked by safety layer: {}",
+            check.reason.unwrap_or_else(|| "Unknown".to_string())
+        ));
+    }
+
+    log::info!("[EXECUTE] Running confirmed command: {}", command);
+
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .output()
+        .map_err(|e| format!("Failed to run command: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if output.status.success() {
+        log::info!("[EXECUTE] Command succeeded");
+        Ok(stdout)
+    } else {
+        log::warn!("[EXECUTE] Command failed: {}", stderr);
+        Err(format!("Command failed:\n{}", stderr))
+    }
+}
+
+/// Tauri command: write file content to the user's Desktop.
+///
+/// Used for export_csv and other file-generating actions.
+/// Validates filename, writes to Desktop directory.
+#[tauri::command]
+fn write_to_desktop(filename: String, content: String) -> Result<String, String> {
+    // Safety: validate filename
+    if !safety::command_check::is_path_safe(&filename) {
+        return Err("Unsafe filename".to_string());
+    }
+
+    let desktop = dirs::desktop_dir().ok_or("Could not find Desktop directory")?;
+    let path = desktop.join(&filename);
+
+    std::fs::write(&path, &content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    let full_path = path.to_string_lossy().to_string();
+    log::info!("[EXECUTE] Wrote file: {}", full_path);
+    Ok(full_path)
 }
 
 /// Tauri command: get the current ActionMenu data.
@@ -512,6 +600,9 @@ pub fn run() {
             get_action_menu,
             get_ocr_text,
             copy_to_clipboard,
+            execute_action,
+            run_confirmed_command,
+            write_to_desktop,
             get_provider_config,
             set_active_provider,
             save_api_key,

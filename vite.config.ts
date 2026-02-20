@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "index.html"),
         "action-menu": resolve(__dirname, "action-menu.html"),
+        "confirm-dialog": resolve(__dirname, "confirm-dialog.html"),
         settings: resolve(__dirname, "settings.html"),
       },
     },

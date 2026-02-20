@@ -12,13 +12,16 @@
 //!   - provider.rs  — provider metadata + configuration checks
 
 mod classify;
+pub mod execute;
 mod gemini;
 pub mod provider;
 mod prompts;
+mod prompts_execute;
 mod streaming;
 pub mod types;
 
 pub use classify::{classify, classify_streaming};
+pub use execute::{execute_action_anthropic, ActionResult};
 pub use gemini::classify_streaming_gemini;
 pub use types::{ActionMenu, ActionMenuSkeleton};
 
