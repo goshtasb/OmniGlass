@@ -8,8 +8,9 @@
 //! - Tauri command handlers for frontend communication
 
 mod capture;
-mod llm;
+pub mod llm;
 mod ocr;
+pub mod safety;
 mod tray;
 
 use capture::CaptureState;
@@ -68,6 +69,20 @@ async fn process_snip(
 ) -> Result<(), String> {
     let pipeline_start = std::time::Instant::now();
 
+    // Write diagnostics to Desktop for debugging — appends each stage.
+    let diag_path = dirs::desktop_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join("omni-glass-debug.log");
+    fn diag_write(path: &std::path::Path, msg: &str) {
+        use std::io::Write;
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(f, "{}", msg);
+        }
+    }
+    // Clear old log and start fresh
+    let _ = std::fs::write(&diag_path, "");
+    diag_write(&diag_path, &format!("=== SNIP: {}x{} at ({},{}) ===", width, height, x, y));
+
     // Stage 2a: Crop the stored screenshot
     let cropped = {
         let state = app.state::<CaptureState>();
@@ -78,6 +93,7 @@ async fn process_snip(
         screenshot.crop_imm(x, y, width, height)
     };
     let crop_ms = pipeline_start.elapsed().as_millis();
+    diag_write(&diag_path, &format!("crop: {}ms", crop_ms));
     log::info!(
         "[CAPTURE] Bounding box received: {{x: {}, y: {}, w: {}, h: {}}}",
         x, y, width, height
@@ -102,8 +118,16 @@ async fn process_snip(
         "accurate" => ocr::RecognitionLevel::Accurate,
         _ => ocr::RecognitionLevel::Fast,
     };
+    let png_bytes_for_reocr = png_bytes.clone();
     let ocr_result = ocr::recognize_text_from_bytes(png_bytes, ocr_level);
     let ocr_ms = ocr_start.elapsed().as_millis();
+    diag_write(&diag_path, &format!("ocr: {} chars in {}ms, confidence={:.2}", ocr_result.char_count, ocr_ms, ocr_result.confidence));
+    if ocr_result.char_count == 0 {
+        diag_write(&diag_path, "WARNING: OCR returned ZERO characters!");
+    } else {
+        diag_write(&diag_path, &format!("ocr_preview: {:?}", &ocr_result.text[..ocr_result.text.len().min(200)]));
+    }
+    eprintln!("[PIPELINE] OCR: {} chars in {}ms, confidence={:.2}", ocr_result.char_count, ocr_ms, ocr_result.confidence);
     log::info!("[OCR] Recognition level: {:?}", ocr_level);
     log::info!(
         "[OCR] Extracted {} chars in {}ms",
@@ -117,8 +141,11 @@ async fn process_snip(
     log::info!("[OCR] has_code_structure: {}", has_code);
 
     // Store OCR text early — action menu needs it for Copy Text (available in skeleton)
+    // Clear previous menu so the poll doesn't render stale data from a prior snip.
     let menu_state = app.state::<llm::ActionMenuState>();
+    *menu_state.menu.lock().unwrap() = None;
     *menu_state.ocr_text.lock().unwrap() = Some(ocr_result.text.clone());
+    *menu_state.crop_png.lock().unwrap() = Some(png_bytes_for_reocr);
 
     // Stage 3a: Close overlay
     if let Some(window) = app.get_webview_window("overlay") {
@@ -144,7 +171,7 @@ async fn process_snip(
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
-    .resizable(false)
+    .resizable(true)
     .build()
     .map_err(|e| format!("Failed to create action menu window: {}", e))?;
 
@@ -162,6 +189,10 @@ async fn process_snip(
     //
     // Provider selection: LLM_PROVIDER env var > first configured key
     let provider = resolve_provider();
+    diag_write(&diag_path, &format!("provider: {}", provider));
+    diag_write(&diag_path, &format!("ANTHROPIC_API_KEY present: {}", std::env::var("ANTHROPIC_API_KEY").map(|k| !k.is_empty()).unwrap_or(false)));
+    diag_write(&diag_path, &format!("LLM_PROVIDER env: {:?}", std::env::var("LLM_PROVIDER").ok()));
+    eprintln!("[PIPELINE] LLM provider: {}", provider);
     let action_menu = match provider.as_str() {
         "gemini" => {
             llm::classify_streaming_gemini(
@@ -184,6 +215,16 @@ async fn process_snip(
             .await
         }
     };
+
+    // Log classify result to diagnostics
+    diag_write(&diag_path, &format!("classify_result: content_type={}, summary={}", action_menu.content_type, action_menu.summary));
+    diag_write(&diag_path, &format!("actions: {}", action_menu.actions.len()));
+    for a in &action_menu.actions {
+        diag_write(&diag_path, &format!("  #{} {} ({})", a.priority, a.label, a.id));
+    }
+    let diag_ms = pipeline_start.elapsed().as_millis();
+    diag_write(&diag_path, &format!("total_pipeline: {}ms", diag_ms));
+    eprintln!("[PIPELINE] Diagnostics written to {}", diag_path.display());
 
     // Store final ActionMenu in state (fallback for get_action_menu command)
     *menu_state.menu.lock().unwrap() = Some(action_menu);
@@ -258,6 +299,128 @@ fn close_action_menu(app: tauri::AppHandle) -> Result<(), String> {
         window.close().map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+// ── Execute pipeline commands ─────────────────────────────────────
+
+/// Tauri command: execute an action on the stored OCR text.
+///
+/// Called by the action menu when the user clicks an action that
+/// requires LLM execution (explain_error, suggest_fix, export_csv, etc.).
+/// Returns an ActionResult JSON to the frontend.
+#[tauri::command]
+async fn execute_action(
+    state: tauri::State<'_, llm::ActionMenuState>,
+    action_id: String,
+) -> Result<llm::ActionResult, String> {
+    let fast_text = {
+        let guard = state.ocr_text.lock().map_err(|e| e.to_string())?;
+        guard
+            .clone()
+            .ok_or("No OCR text available — snip first".to_string())?
+    };
+
+    // For code-fix actions, re-OCR with .accurate for higher fidelity text.
+    // The classify step used .fast (~30ms) which is good enough for action detection,
+    // but code fixes need every bracket and quote to be correct.
+    let needs_accurate = matches!(
+        action_id.as_str(),
+        "suggest_fix" | "fix_error" | "fix_syntax" | "fix_code" | "format_code"
+    );
+    let ocr_text = if needs_accurate {
+        let crop_png = {
+            let guard = state.crop_png.lock().map_err(|e| e.to_string())?;
+            guard.clone()
+        };
+        match crop_png {
+            Some(png_bytes) => {
+                let start = std::time::Instant::now();
+                let result = ocr::recognize_text_from_bytes(
+                    png_bytes,
+                    ocr::RecognitionLevel::Accurate,
+                );
+                let ms = start.elapsed().as_millis();
+                eprintln!(
+                    "[EXECUTE] Re-OCR (.accurate): {} chars in {}ms (was {} chars with .fast)",
+                    result.char_count, ms, fast_text.len()
+                );
+                result.text
+            }
+            None => {
+                eprintln!("[EXECUTE] No crop PNG available, using .fast OCR text");
+                fast_text
+            }
+        }
+    } else {
+        fast_text
+    };
+
+    log::info!("[EXECUTE] Starting action: {}", action_id);
+    let result = llm::execute_action_anthropic(&action_id, &ocr_text).await;
+    log::info!(
+        "[EXECUTE] Complete: status={}, type={}",
+        result.status,
+        result.result.result_type
+    );
+
+    Ok(result)
+}
+
+/// Tauri command: run a confirmed shell command.
+///
+/// Only called after the user explicitly clicks "Run" in the confirmation
+/// dialog. Runs the command via the default shell and returns its output.
+#[tauri::command]
+async fn run_confirmed_command(command: String) -> Result<String, String> {
+    // Double-check safety before executing
+    let check = safety::command_check::is_command_safe(&command);
+    if !check.safe {
+        return Err(format!(
+            "Command blocked by safety layer: {}",
+            check.reason.unwrap_or_else(|| "Unknown".to_string())
+        ));
+    }
+
+    log::info!("[EXECUTE] Running confirmed command: {}", command);
+
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&command)
+        .output()
+        .map_err(|e| format!("Failed to run command: {}", e))?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    if output.status.success() {
+        log::info!("[EXECUTE] Command succeeded");
+        Ok(stdout)
+    } else {
+        log::warn!("[EXECUTE] Command failed: {}", stderr);
+        Err(format!("Command failed:\n{}", stderr))
+    }
+}
+
+/// Tauri command: write file content to the user's Desktop.
+///
+/// Used for export_csv and other file-generating actions.
+/// Validates filename, writes to Desktop directory.
+#[tauri::command]
+fn write_to_desktop(filename: String, content: String) -> Result<String, String> {
+    // Safety: validate filename
+    if !safety::command_check::is_path_safe(&filename) {
+        return Err("Unsafe filename".to_string());
+    }
+
+    let desktop = dirs::desktop_dir().ok_or("Could not find Desktop directory")?;
+    let path = desktop.join(&filename);
+
+    std::fs::write(&path, &content)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    let full_path = path.to_string_lossy().to_string();
+    log::info!("[EXECUTE] Wrote file: {}", full_path);
+    Ok(full_path)
 }
 
 /// Tauri command: get the current ActionMenu data.
@@ -497,6 +660,23 @@ fn has_api_key(provider_id: &str) -> bool {
 /// Entry point — called by Tauri runtime.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env.local → .env from project root.
+    // Uses CARGO_MANIFEST_DIR (compile-time path to src-tauri/) to reliably
+    // find the project root regardless of the binary's working directory.
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let project_root = manifest_dir.parent().unwrap_or(manifest_dir);
+
+    'env_load: for env_file in [".env.local", ".env"] {
+        let path = project_root.join(env_file);
+        if path.exists() {
+            match dotenvy::from_path(&path) {
+                Ok(_) => eprintln!("[STARTUP] Loaded {}", path.display()),
+                Err(e) => eprintln!("[STARTUP] Failed to load {}: {}", path.display(), e),
+            }
+            break 'env_load;
+        }
+    }
+
     env_logger::init();
 
     tauri::Builder::default()
@@ -512,6 +692,9 @@ pub fn run() {
             get_action_menu,
             get_ocr_text,
             copy_to_clipboard,
+            execute_action,
+            run_confirmed_command,
+            write_to_desktop,
             get_provider_config,
             set_active_provider,
             save_api_key,
