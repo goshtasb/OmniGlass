@@ -6,7 +6,6 @@
 //! Loads the API key from .env.local using dotenvy — same as the app.
 
 use omni_glass_lib::llm::classify;
-use omni_glass_lib::llm::types::ActionMenu;
 
 fn load_env() {
     let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));

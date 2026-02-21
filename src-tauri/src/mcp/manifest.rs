@@ -3,14 +3,14 @@
 //! Each plugin directory must contain an `omni-glass.plugin.json` file
 //! describing the plugin's identity, runtime, entry point, and permissions.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// The filename expected in every plugin directory.
 pub const MANIFEST_FILENAME: &str = "omni-glass.plugin.json";
 
 /// Parsed and validated plugin manifest.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PluginManifest {
     pub id: String,
     pub name: String,
@@ -24,7 +24,7 @@ pub struct PluginManifest {
 }
 
 /// Plugin runtime environment.
-#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Runtime {
     Node,
@@ -32,15 +32,40 @@ pub enum Runtime {
     Binary,
 }
 
+/// Filesystem access declaration: a path and its access level.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct FsPerm {
+    pub path: String,
+    pub access: String, // "read" | "write" | "read-write"
+}
+
+/// Shell access declaration: list of allowed commands.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct ShellPerm {
+    pub commands: Vec<String>,
+}
+
 /// Plugin permission declarations.
-#[derive(Debug, Clone, Default, Deserialize)]
+///
+/// Each field is optional (except `clipboard`). Omitting a field means the
+/// plugin does NOT request that capability. The sandbox denies everything
+/// not explicitly declared here.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, PartialEq)]
 pub struct Permissions {
     #[serde(default)]
     pub clipboard: bool,
+    /// Network domains the plugin may contact. `None` = no network access.
     #[serde(default)]
-    pub network: bool,
+    pub network: Option<Vec<String>>,
+    /// Filesystem paths + access levels.
     #[serde(default)]
-    pub filesystem: bool,
+    pub filesystem: Option<Vec<FsPerm>>,
+    /// Environment variables the plugin may read (by name).
+    #[serde(default)]
+    pub environment: Option<Vec<String>>,
+    /// Shell commands the plugin may spawn.
+    #[serde(default)]
+    pub shell: Option<ShellPerm>,
 }
 
 /// Load and validate a plugin manifest from a directory.
@@ -154,6 +179,62 @@ mod tests {
         );
         let err = load_manifest(&dir).unwrap_err();
         assert!(err.contains("path traversal"));
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn old_bool_permissions_format_still_loads() {
+        let dir = std::env::temp_dir().join("og-test-old-perms");
+        let _ = fs::remove_dir_all(&dir);
+        setup_test_plugin(
+            &dir,
+            r#"{
+                "id": "com.example.old",
+                "name": "Old Format",
+                "version": "1.0.0",
+                "runtime": "node",
+                "entry": "index.js",
+                "permissions": {"clipboard": true}
+            }"#,
+            "index.js",
+        );
+        let m = load_manifest(&dir).unwrap();
+        assert!(m.permissions.clipboard);
+        assert!(m.permissions.network.is_none());
+        assert!(m.permissions.filesystem.is_none());
+        assert!(m.permissions.environment.is_none());
+        assert!(m.permissions.shell.is_none());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rich_permissions_format_loads() {
+        let dir = std::env::temp_dir().join("og-test-rich-perms");
+        let _ = fs::remove_dir_all(&dir);
+        setup_test_plugin(
+            &dir,
+            r#"{
+                "id": "com.example.rich",
+                "name": "Rich Perms",
+                "version": "1.0.0",
+                "runtime": "node",
+                "entry": "index.js",
+                "permissions": {
+                    "clipboard": true,
+                    "network": ["api.example.com"],
+                    "filesystem": [{"path": "~/Documents", "access": "read"}],
+                    "environment": ["JIRA_TOKEN"],
+                    "shell": {"commands": ["echo"]}
+                }
+            }"#,
+            "index.js",
+        );
+        let m = load_manifest(&dir).unwrap();
+        assert!(m.permissions.clipboard);
+        assert_eq!(m.permissions.network.as_ref().unwrap().len(), 1);
+        assert_eq!(m.permissions.filesystem.as_ref().unwrap()[0].access, "read");
+        assert_eq!(m.permissions.environment.as_ref().unwrap()[0], "JIRA_TOKEN");
+        assert_eq!(m.permissions.shell.as_ref().unwrap().commands[0], "echo");
         let _ = fs::remove_dir_all(&dir);
     }
 

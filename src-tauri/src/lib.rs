@@ -20,6 +20,7 @@ pub mod settings_commands;
 mod tray;
 
 use capture::CaptureState;
+use mcp::loader::PendingApprovals;
 use mcp::ToolRegistry;
 use tauri::Manager;
 
@@ -51,6 +52,7 @@ pub fn run() {
         .manage(CaptureState::new())
         .manage(llm::ActionMenuState::new())
         .manage(ToolRegistry::new())
+        .manage(PendingApprovals::new())
         .invoke_handler(tauri::generate_handler![
             // Simple commands (commands.rs)
             commands::crop_region,
@@ -75,6 +77,9 @@ pub fn run() {
             settings_commands::open_settings,
             settings_commands::get_ocr_mode,
             settings_commands::set_ocr_mode,
+            // MCP approval commands (approval_commands.rs)
+            mcp::approval_commands::get_pending_approvals,
+            mcp::approval_commands::approve_plugin,
         ])
         .setup(|app| {
             log::info!("Omni-Glass starting up");
@@ -94,8 +99,25 @@ pub fn run() {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 let registry = handle.state::<ToolRegistry>();
+                let pending = handle.state::<PendingApprovals>();
                 mcp::builtins::register_builtins(&registry).await;
-                mcp::loader::load_plugins(&registry).await;
+                mcp::loader::load_plugins(&registry, &pending).await;
+
+                // If any plugins are queued for approval, open the prompt window
+                let has_pending = !pending.queue.lock().await.is_empty();
+                if has_pending {
+                    log::info!("[MCP] Opening permission prompt for pending plugins");
+                    let _ = tauri::WebviewWindowBuilder::new(
+                        &handle,
+                        "permission-prompt",
+                        tauri::WebviewUrl::App("permission-prompt.html".into()),
+                    )
+                    .title("Plugin Permissions")
+                    .inner_size(460.0, 380.0)
+                    .resizable(false)
+                    .center()
+                    .build();
+                }
             });
 
             log::info!("System tray initialized — ready for snips");

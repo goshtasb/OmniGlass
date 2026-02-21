@@ -34,6 +34,7 @@ async fn mcp_spawn_and_initialize() {
         "node",
         &[&test_plugin_entry()],
         HashMap::new(),
+        None,
     )
     .expect("Failed to spawn test plugin");
 
@@ -56,6 +57,7 @@ async fn mcp_list_tools() {
         "node",
         &[&test_plugin_entry()],
         HashMap::new(),
+        None,
     )
     .expect("Failed to spawn");
 
@@ -81,6 +83,7 @@ async fn mcp_call_tool_echo() {
         "node",
         &[&test_plugin_entry()],
         HashMap::new(),
+        None,
     )
     .expect("Failed to spawn");
 
@@ -109,6 +112,7 @@ async fn mcp_call_unknown_tool_returns_error() {
         "node",
         &[&test_plugin_entry()],
         HashMap::new(),
+        None,
     )
     .expect("Failed to spawn");
 
@@ -139,6 +143,7 @@ async fn registry_plugin_tool_dispatch() {
         "node",
         &[&test_plugin_entry()],
         HashMap::new(),
+        None,
     )
     .expect("Failed to spawn");
 

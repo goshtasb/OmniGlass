@@ -26,11 +26,14 @@ impl McpServer {
     /// Spawn a child process and prepare stdio pipes.
     ///
     /// Does NOT perform the initialize handshake — call `initialize()` after.
+    /// `cwd` sets the working directory (important: sandboxed plugins wall
+    /// off /Users, so CWD must be inside an allowed path).
     pub fn spawn(
         plugin_id: &str,
         command: &str,
         args: &[&str],
         env: HashMap<String, String>,
+        cwd: Option<&std::path::Path>,
     ) -> Result<Self, String> {
         let mut cmd = tokio::process::Command::new(command);
         cmd.args(args)
@@ -39,6 +42,9 @@ impl McpServer {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .kill_on_drop(true);
+        if let Some(dir) = cwd {
+            cmd.current_dir(dir);
+        }
 
         let mut child = cmd.spawn().map_err(|e| {
             format!("Failed to spawn MCP server '{}' ({}): {}", plugin_id, command, e)
@@ -60,6 +66,27 @@ impl McpServer {
             stdout: BufReader::new(stdout),
             next_id: AtomicU64::new(1),
         })
+    }
+
+    /// Spawn a child process inside a macOS sandbox-exec sandbox.
+    ///
+    /// Wraps the command in `sandbox-exec -f {profile_path}` so the kernel
+    /// enforces the profile's restrictions. CWD is set to `plugin_dir` because
+    /// the sandbox walls off /Users — Node.js calls getcwd() at startup.
+    #[cfg(target_os = "macos")]
+    pub fn spawn_sandboxed(
+        plugin_id: &str,
+        command: &str,
+        args: &[&str],
+        env: HashMap<String, String>,
+        sandbox_profile_path: &std::path::Path,
+        plugin_dir: &std::path::Path,
+    ) -> Result<Self, String> {
+        let profile_str = sandbox_profile_path.to_str()
+            .ok_or("Invalid sandbox profile path")?;
+        let mut sandbox_args = vec!["-f", profile_str, command];
+        sandbox_args.extend(args);
+        Self::spawn(plugin_id, "sandbox-exec", &sandbox_args, env, Some(plugin_dir))
     }
 
     /// Send the initialize handshake and notifications/initialized notification.
