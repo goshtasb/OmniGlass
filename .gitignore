@@ -40,6 +40,9 @@ src-tauri/swift-src/*.a
 *.gdoc
 *.gsheet
 
+# Binary document files (keep in docs/prd/ locally, not in repo)
+*.docx
+
 # Benchmark outputs
 *.csv
 
