@@ -45,6 +45,7 @@ export async function showTextResult(text: string): Promise<void> {
 
   const codeBlock = extractCodeBlock(text);
   const rendered = renderMarkdownLight(text);
+  const urlMatch = text.match(/https?:\/\/[^\s)]+/);
 
   const actionsEl = document.getElementById("menu-actions");
   if (actionsEl) {
@@ -65,6 +66,15 @@ export async function showTextResult(text: string): Promise<void> {
         justify-content: flex-end;
         border-top: 1px solid rgba(255,255,255,0.1);
       ">
+        ${urlMatch ? `<button id="btn-open-link" style="
+          background: rgba(96,165,250,0.15);
+          border: 1px solid rgba(96,165,250,0.4);
+          color: #60a5fa;
+          padding: 4px 12px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+        ">Open Link</button>` : ""}
         ${codeBlock ? `<button id="btn-copy-fix" style="
           background: rgba(74,222,128,0.15);
           border: 1px solid rgba(74,222,128,0.4);
@@ -94,6 +104,13 @@ export async function showTextResult(text: string): Promise<void> {
         ">Close</button>
       </div>
     `;
+
+    if (urlMatch) {
+      document.getElementById("btn-open-link")?.addEventListener("click", async () => {
+        await open(urlMatch[0]);
+        closeAfterDelay(400);
+      });
+    }
 
     if (codeBlock) {
       document.getElementById("btn-copy-fix")?.addEventListener("click", async () => {
