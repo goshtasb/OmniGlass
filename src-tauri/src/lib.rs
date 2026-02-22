@@ -72,6 +72,7 @@ pub fn run() {
             commands::summarize_command_output,
             commands::write_to_desktop,
             commands::write_file_to_path,
+            commands::open_file,
             commands::close_text_launcher,
             commands::close_tray_menu,
             commands::start_snip,

@@ -325,3 +325,21 @@ pub fn write_file_to_path(file_path: String, content: String) -> Result<String, 
     log::info!("[EXPORT] Wrote file: {}", file_path);
     Ok(file_path)
 }
+
+/// Tauri command: open a file with the system default application.
+///
+/// Uses macOS `open` command. Only allows paths under $HOME.
+#[tauri::command]
+pub fn open_file(file_path: String) -> Result<(), String> {
+    if !safety::command_check::is_path_safe(&file_path) {
+        return Err("Unsafe file path".to_string());
+    }
+
+    std::process::Command::new("open")
+        .arg(&file_path)
+        .spawn()
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+
+    log::info!("[EXPORT] Opened file: {}", file_path);
+    Ok(())
+}

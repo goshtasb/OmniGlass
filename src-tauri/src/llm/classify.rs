@@ -216,22 +216,27 @@ pub async fn classify_streaming(
         }
     };
 
-    let menu = ensure_required_actions(menu);
+    let menu = ensure_required_actions(menu, has_table);
     let _ = app.emit("action-menu-complete", &menu);
     menu
 }
 
 /// Post-process: guarantee certain actions exist for specific content types.
 ///
-/// The LLM is non-deterministic — it might omit "Export CSV" for table content.
-/// This ensures critical actions are always present when the content warrants them.
-fn ensure_required_actions(mut menu: ActionMenu) -> ActionMenu {
-    let has_csv = menu.actions.iter().any(|a| a.id.contains("csv") || a.id.contains("export"));
+/// The LLM is non-deterministic — it might omit "Export CSV" for table content,
+/// or classify a spreadsheet as "mixed" instead of "table". We use both the
+/// LLM content_type AND the OCR has_table hint to decide.
+fn ensure_required_actions(mut menu: ActionMenu, has_table: bool) -> ActionMenu {
+    // Check specifically for CSV-related action IDs (not broad "export" match)
+    let has_csv_action = menu.actions.iter().any(|a| {
+        a.id.contains("csv") || a.id == "export_csv" || a.id == "export_to_csv" || a.id == "extract_to_csv"
+    });
     let has_explain = menu.actions.iter().any(|a| a.id.contains("explain"));
     let has_fix = menu.actions.iter().any(|a| a.id.contains("fix") || a.id.contains("suggest"));
 
-    // Table/kv_pairs content must always have an export CSV option
-    if matches!(menu.content_type.as_str(), "table" | "kv_pairs") && !has_csv {
+    // Inject CSV export if: content is table/kv_pairs OR OCR detected table structure
+    let needs_csv = matches!(menu.content_type.as_str(), "table" | "kv_pairs") || has_table;
+    if needs_csv && !has_csv_action {
         let next_priority = menu.actions.len() as u8 + 1;
         menu.actions.push(Action {
             id: "export_csv".to_string(),
@@ -241,7 +246,7 @@ fn ensure_required_actions(mut menu: ActionMenu) -> ActionMenu {
             description: "Extract tabular data and export as CSV file".to_string(),
             requires_execution: true,
         });
-        log::info!("[LLM] Injected export_csv action for {} content", menu.content_type);
+        log::info!("[LLM] Injected export_csv (type={}, has_table={})", menu.content_type, has_table);
     }
 
     // Error content must always have explain_error and suggest_fix
@@ -343,5 +348,5 @@ pub async fn classify(
         log::warn!("[LLM] Failed to parse ActionMenu: {}", e);
         ActionMenu::fallback()
     });
-    ensure_required_actions(menu)
+    ensure_required_actions(menu, has_table)
 }
