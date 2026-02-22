@@ -130,7 +130,7 @@ pub async fn process_snip(
     .decorations(false)
     .always_on_top(true)
     .skip_taskbar(true)
-    .resizable(true)
+    .resizable(false)
     .build()
     .map_err(|e| format!("Failed to create action menu window: {}", e))?;
 

@@ -6,7 +6,7 @@
 
 use super::prompts::{self, CLASSIFY_SYSTEM_PROMPT, MAX_TOKENS, MODEL};
 use super::streaming;
-use super::types::{ActionMenu, ActionMenuSkeleton};
+use super::types::{Action, ActionMenu, ActionMenuSkeleton};
 use tauri::Emitter;
 
 /// Call Claude API with streaming to classify OCR text.
@@ -216,7 +216,60 @@ pub async fn classify_streaming(
         }
     };
 
+    let menu = ensure_required_actions(menu);
     let _ = app.emit("action-menu-complete", &menu);
+    menu
+}
+
+/// Post-process: guarantee certain actions exist for specific content types.
+///
+/// The LLM is non-deterministic — it might omit "Export CSV" for table content.
+/// This ensures critical actions are always present when the content warrants them.
+fn ensure_required_actions(mut menu: ActionMenu) -> ActionMenu {
+    let has_csv = menu.actions.iter().any(|a| a.id.contains("csv") || a.id.contains("export"));
+    let has_explain = menu.actions.iter().any(|a| a.id.contains("explain"));
+    let has_fix = menu.actions.iter().any(|a| a.id.contains("fix") || a.id.contains("suggest"));
+
+    // Table/kv_pairs content must always have an export CSV option
+    if matches!(menu.content_type.as_str(), "table" | "kv_pairs") && !has_csv {
+        let next_priority = menu.actions.len() as u8 + 1;
+        menu.actions.push(Action {
+            id: "export_csv".to_string(),
+            label: "Export CSV".to_string(),
+            icon: "download".to_string(),
+            priority: next_priority,
+            description: "Extract tabular data and export as CSV file".to_string(),
+            requires_execution: true,
+        });
+        log::info!("[LLM] Injected export_csv action for {} content", menu.content_type);
+    }
+
+    // Error content must always have explain_error and suggest_fix
+    if menu.content_type == "error" {
+        if !has_explain {
+            let next_priority = menu.actions.len() as u8 + 1;
+            menu.actions.push(Action {
+                id: "explain_error".to_string(),
+                label: "Explain Error".to_string(),
+                icon: "lightbulb".to_string(),
+                priority: next_priority,
+                description: "Explain what this error means".to_string(),
+                requires_execution: true,
+            });
+        }
+        if !has_fix {
+            let next_priority = menu.actions.len() as u8 + 1;
+            menu.actions.push(Action {
+                id: "suggest_fix".to_string(),
+                label: "Suggest Fix".to_string(),
+                icon: "wrench".to_string(),
+                priority: next_priority,
+                description: "Suggest a fix for this error".to_string(),
+                requires_execution: true,
+            });
+        }
+    }
+
     menu
 }
 
@@ -286,8 +339,9 @@ pub async fn classify(
     };
 
     let json_str = streaming::strip_code_fences(text_content);
-    serde_json::from_str::<ActionMenu>(&json_str).unwrap_or_else(|e| {
+    let menu = serde_json::from_str::<ActionMenu>(&json_str).unwrap_or_else(|e| {
         log::warn!("[LLM] Failed to parse ActionMenu: {}", e);
         ActionMenu::fallback()
-    })
+    });
+    ensure_required_actions(menu)
 }
