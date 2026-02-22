@@ -1,147 +1,177 @@
 # Omni-Glass
 
-**Stop copy-pasting into ChatGPT.**
+## Why I Built This
 
-You see a Python traceback in your terminal. Today, you select it, copy it, open a browser, paste it into an AI chatbot, read the response, switch back to your terminal, and type the fix. Seven steps. Ten seconds of context-switching.
+Claude Desktop can take screenshots now. So can ChatGPT. You snip your screen, the AI looks at it, and writes you a nice explanation of what went wrong.
 
-With Omni-Glass: snip the error, click "Fix Error," paste the fix. Three seconds. You never leave your screen.
+Then you still have to fix it yourself.
+
+I kept thinking: the AI clearly knows the answer. It just told me `pip install pandas` will fix this. Why am I the one typing it? Why can't it just... do it?
+
+So I built Omni-Glass. You snip your screen, and instead of getting a chat response, you get a button that says "Fix Error." You click it. It runs the command. Done.
+
+That's the core idea: **AI that acts on what it sees, not just talks about it.**
 
 ![Omni-Glass Demo](docs/assets/demo.gif)
 
-Omni-Glass is an open-source desktop tool for macOS. It sits in your menu bar. When you need it, you click the icon, draw a box around anything on your screen, and get a menu of intelligent actions — powered by your choice of LLM, running locally or in the cloud.
+## How It's Different From Claude Desktop
 
-## What it does
+I tested both side by side. Here's what actually happened:
 
-**Snip a terminal error —** get an explanation, a fix command, or a GitHub issue created automatically.
+| I tried... | Claude Desktop | Omni-Glass |
+|-----------|---------------|------------|
+| "How much RAM is Chrome using?" | Told me how to open Activity Monitor | Ran the command and showed me the answer |
+| Export a data table as CSV | Gave me a messy blob of text | Opened a native save dialog with a clean CSV |
+| Fix a Python error | Explained the fix in a paragraph | Generated `pip install pandas`, asked me to confirm, ran it |
+| Create a GitHub issue from a bug | Wrote a draft I'd need to copy-paste | Created the issue on GitHub and gave me the link |
 
-**Snip a data table —** export it as a CSV file with a native save dialog.
+Claude reads your screen and talks about it. Omni-Glass reads your screen and does something about it.
 
-**Snip foreign documentation —** get an instant translation.
+### The security difference nobody talks about
 
-**Snip anything —** copy the extracted text, search the web, or ask the LLM to explain it.
+Claude Desktop runs MCP plugins with your full user permissions. If a plugin goes rogue — or if a prompt injection hits — it has access to your SSH keys, your `.env` files, your browser cookies. Everything.
 
-**Don't want to snip?** Click "Type Command" in the menu bar and type what you want in plain English. Same pipeline, no screenshot needed.
+Omni-Glass sandboxes every plugin at the macOS kernel level. Your entire `/Users/` directory is walled off. A plugin physically cannot read your home folder unless you explicitly approved a specific path. Environment variables are filtered. Shell commands require your confirmation.
 
-## How it works
+I built this because I want to run community plugins without worrying about what they can access.
 
-1. You draw a box on your screen
-2. OCR runs locally on your device (Apple Vision on macOS, Windows OCR on Windows). **No screenshots leave your machine.**
-3. The extracted text goes to an LLM (Claude Haiku, Gemini Flash, or a local model via llama.cpp)
-4. You get a menu of contextual actions in under 1 second
-5. Click an action. It executes.
+## Quick Start
 
-That's the entire product. Everything else is about making it extensible and secure.
-
-## Built-in actions
-
-| Action | What it does |
-|--------|-------------|
-| Explain Error | Explains what went wrong and why |
-| Fix Error | Returns a shell command or corrected code — you choose to run it |
-| Export CSV | Extracts tabular data into a CSV file |
-| Explain This | Plain-English explanation of whatever you snipped |
-| Copy Text | Copies OCR-extracted text to clipboard |
-| Search Web | Opens a browser search for the snipped content |
-| Quick Translate | Translates snipped text to your preferred language |
-
-## Extend it with plugins
-
-Omni-Glass supports the [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). Any MCP server that runs over `stdio` can add actions to your menu.
-
-**Example: the GitHub Issues plugin.** Snip a terminal error. The action menu now includes "Create GitHub Issue." Click it. Omni-Glass extracts the error, generates a title and description, and creates the issue in your repo via the GitHub API. You get a link to the new issue.
-
-Build your own plugin in 10 minutes:
+Requires: macOS 12+, Rust, Node.js 18+
 
 ```bash
-git clone https://github.com/goshtasb/omni-glass-plugin-template.git
-cd omni-glass-plugin-template
-# Edit index.js — add your tool logic
-# Copy to ~/.config/omni-glass/plugins/your-plugin/
-# Restart Omni-Glass — your action appears in the menu
-```
-
-Read the [Plugin Developer Guide](docs/plugin-guide.md) for the full walkthrough.
-
-## What you could build
-
-Omni-Glass sees your screen and has an MCP plugin system. Anything you can do with text input and an API, you can trigger from a screen snip or a typed command:
-
-- **Snip a Slack message —** create a Linear, Jira, or Asana ticket with the context already filled in
-- **Snip a design mockup —** generate the Tailwind CSS that matches it
-- **Snip a meeting invite —** check your Google Calendar for conflicts
-- **Snip a SQL error —** query your database schema and suggest the fix
-- **Snip a log file —** send it to Datadog or Grafana as a tagged event
-- **Snip a code snippet —** run it in a sandbox and return the output
-- **Snip a receipt —** extract the total and log it to your expense tracker
-- **Snip an API response —** generate the TypeScript types automatically
-- **Snip a competitor's UI —** diff it against your own product's screenshots
-
-Each of these is an MCP server with one tool. Most are under 100 lines of code. The [plugin template](https://github.com/goshtasb/omni-glass-plugin-template) gives you the boilerplate — you just write the API call.
-
-## Security
-
-Every plugin runs inside a kernel-level macOS sandbox (`sandbox-exec`).
-
-- **Your home directory is walled off.** Plugins cannot read anything under `/Users/` unless you explicitly approve a specific path.
-- **API keys are stripped.** Environment variables are filtered before a plugin process starts. Your `ANTHROPIC_API_KEY`, `AWS_SECRET_ACCESS_KEY`, and other secrets are invisible to plugins.
-- **Shell commands require confirmation.** If any action wants to run a command, you see it first and click "Run" or "Cancel."
-- **PII is redacted.** Credit card numbers, SSNs, and API keys in your snipped text are redacted before being sent to a cloud LLM.
-
-When you install a plugin, a permission dialog shows exactly what it can access. You approve or deny. No silent escalation.
-
-## Bring your own key (BYOK)
-
-There are no Omni-Glass servers. Your API key talks directly to Anthropic or Google. We never see your data, your prompts, or your API usage.
-
-| Provider | Type | Speed |
-|----------|------|-------|
-| Claude Haiku | Cloud API | ~3s full pipeline |
-| Gemini Flash | Cloud API | Built, not yet benchmarked |
-| Qwen-2.5-3B | Local (llama.cpp) | ~8-15s, no internet needed |
-
-Switch providers anytime in Settings. Local mode means zero cloud dependency — your screen content never leaves your machine.
-
-## Quick start
-
-Requires: macOS 12+, Rust, Node.js 18+, an API key (Anthropic or Google), or use local mode with no key.
-
-```bash
-git clone https://github.com/goshtasb/omni-glass.git
-cd omni-glass
+git clone https://github.com/goshtasb/omniglass.git
+cd omniglass
 npm install
 npm run tauri dev
 ```
 
-On first launch:
 1. Click the Omni-Glass icon in your menu bar
-2. Go to Settings — paste your API key (or download a local model)
-3. Click "Snip Screen" — draw a box around something — see the action menu
+2. Settings → paste your Anthropic or Google API key (or download a local model — no API key needed)
+3. Click "Snip Screen" → draw a box → see the action menu
 
-## Project status
+> **No API key?** Omni-Glass runs Qwen-2.5-3B locally via llama.cpp. Full pipeline in ~6 seconds, nothing leaves your machine. Select "Local" in Settings and download the model.
 
-Omni-Glass is in active development. Here's what works today and what's coming:
+## See It Work
 
-| Feature | Status |
-|---------|--------|
-| macOS snip — OCR — action menu | Working |
-| 7 built-in actions | Working |
-| MCP plugin system with sandbox | Working |
-| Text launcher (type commands) | Working |
-| Local LLM (Qwen-2.5 via llama.cpp) | Built, testing |
-| GitHub Issues plugin | Working |
-| Windows support | Code written, untested on hardware |
-| Linux support | Planned |
-| Plugin registry (in-app browse/install) | Planned |
-| UI element detection (click buttons, fill forms) | Planned |
+**Snip a Python traceback →** Omni-Glass generates `pip install pandas` and shows a "Run" button. One click, it executes.
+
+**Snip a data table →** A native save dialog opens. Your CSV is ready.
+
+**Snip a Slack bug report →** A GitHub issue is created in your repo with the title and description filled in.
+
+**Snip Japanese documentation →** The English translation is on your clipboard.
+
+**Type a command →** Click "Type Command" in the menu bar. "How much disk space do I have?" It runs `df -h` and shows you the answer. No snipping needed.
+
+## Built-in Actions
+
+| Action | What happens when you click it |
+|--------|-------------------------------|
+| Fix Error | Generates a shell command or code fix. You confirm, it runs. |
+| Explain Error | Plain-English explanation of the error |
+| Export CSV | Extracts table data into a CSV with a native save dialog |
+| Explain This | Explains whatever you snipped |
+| Copy Text | OCR-extracted text → clipboard |
+| Search Web | Opens a browser search |
+| Quick Translate | Translates and copies to clipboard |
+
+## Build Your Own Actions
+
+This is where it gets interesting. Omni-Glass is built on [MCP (Model Context Protocol)](https://modelcontextprotocol.io/). If you can write a Node.js or Python script that takes JSON in and puts JSON out, you can add any action to the menu.
+
+**You don't write prompt engineering.** Omni-Glass handles the hard part — it reads the raw screen text and automatically generates the structured JSON arguments your tool expects. You just write the API call.
+
+**What you could build (each is a single MCP server, most under 100 lines):**
+
+- **Snip a Slack message →** create a Jira/Linear/Asana ticket with context filled in
+- **Snip a design mockup →** generate the Tailwind CSS
+- **Snip a SQL error →** query your database schema, suggest the fix
+- **Snip a log file →** send it to Datadog or Grafana as a tagged event
+- **Snip a receipt →** extract the total, log it to your expense tracker
+- **Snip an API response →** generate TypeScript types
+- **Snip a meeting invite →** check your Google Calendar for conflicts
+
+```bash
+# Start building a plugin
+# 1. Look at the GitHub Issues plugin in the repo as a reference
+# 2. Create a folder in ~/.config/omni-glass/plugins/your-plugin/
+# 3. Add an omni-glass.plugin.json manifest
+# 4. Write your index.js MCP server
+# 5. Restart Omni-Glass — your action appears in the menu
+```
+
+Read the [Plugin Developer Guide](docs/plugin-guide.md) for the full walkthrough.
 
 ## Contributing
 
-We're looking for help with:
+**Don't just read the code. Break it.**
 
-- **Breaking the sandbox.** Try to escape the macOS `sandbox-exec` profile. If you can read `~/.ssh/id_rsa` from a plugin, that's a critical bug.
-- **Windows testing.** The code compiles in CI but hasn't been tested on real hardware.
-- **Linux port.** Tesseract OCR integration, Bubblewrap sandbox, tray icon on Wayland.
-- **Plugins.** Build something useful and share it.
+The most valuable thing you can do is try to escape the sandbox. Every plugin runs inside a macOS `sandbox-exec` profile that walls off your home directory. If you can read `~/.ssh/id_rsa` from inside a plugin process, that's a critical security bug and I want to know immediately.
+
+**Build a plugin.** Pick any API you use daily and make it an Omni-Glass action. If it's useful to you, it's useful to others. Open a PR or share it in Discord.
+
+**Plugin ideas we'd love to see (good first issues):**
+
+| Plugin | Difficulty | What it does |
+|--------|-----------|-------------|
+| Slack Webhook | Easy | Snip anything → send to a Slack channel |
+| Jira/Linear Ticket | Easy | Snip a bug → create a ticket |
+| Notion Clipper | Medium | Snip content → save to a Notion page |
+| Terminal Command | Easy | Snip an error → suggest and run the fix command |
+| AWS Console Helper | Medium | Snip an AWS error → look up the service docs |
+| Datadog Event | Easy | Snip a log → send as a Datadog event |
+
+**Port to other platforms.** Windows code compiles in CI but has never been tested on real hardware. Linux needs Tesseract OCR integration and Bubblewrap sandbox. Both are meaningful contributions.
+
+## Architecture
+
+One paragraph, not a lecture:
+
+You snip your screen → Apple Vision OCR extracts text locally (no images leave your machine) → the text goes to an LLM (Claude Haiku, Gemini Flash, or Qwen-2.5 locally via llama.cpp) → the LLM classifies the content and streams a menu of actions in under 1 second → you click an action → it executes through the built-in handler or a sandboxed MCP plugin. Two inputs (snip or type), one pipeline, same plugins.
+
+## Security Model
+
+| Layer | What it does |
+|-------|-------------|
+| **macOS sandbox-exec** | Kernel-level isolation. Plugins cannot read `/Users/` unless you approved a specific path. |
+| **Environment filtering** | API keys and secrets are stripped before plugin processes start. |
+| **Command confirmation** | Every shell command shows in the UI. You click "Run" or "Cancel." |
+| **PII redaction** | Credit card numbers, SSNs, and API keys are scrubbed before text goes to a cloud LLM. |
+| **Permission prompt** | On first install, a dialog shows exactly what the plugin can access. You approve or deny. |
+
+## Providers
+
+No Omni-Glass servers. Your key, your data, direct to the provider.
+
+| Provider | Type | Pipeline Speed |
+|----------|------|---------------|
+| Claude Haiku | Cloud | ~3s |
+| Gemini Flash | Cloud | Built, benchmarking soon |
+| Qwen-2.5-3B | Local (llama.cpp) | ~6s, zero cloud dependency |
+
+## Status
+
+Omni-Glass is in active development. It works today on macOS. Here's where things stand:
+
+| Feature | Status |
+|---------|--------|
+| Screen snip → OCR → action menu | ✅ Working |
+| 7 built-in actions | ✅ Working |
+| MCP plugin system + sandbox | ✅ Working |
+| Text launcher | ✅ Working |
+| Local LLM (Qwen-2.5) | ✅ Working |
+| GitHub Issues plugin | ✅ Working |
+| Windows | 🔧 Compiles, untested on hardware |
+| Linux | 📋 Planned |
+| Plugin registry (in-app browse) | 📋 Planned |
+| Pre-built .dmg installer | 📋 Coming soon |
+
+## Community
+
+Questions, plugin ideas, or want to show what you built?
+
+→ [Join the Discord](https://discord.gg/YOUR_INVITE_LINK)
 
 ## License
 
