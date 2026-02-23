@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/omni-glass-logo.png" alt="OmniGlass" width="120" />
+  <img src="docs/assets/omni-glass-logo.png" alt="OmniGlass" width="280" />
 </p>
 
 <h1 align="center">OmniGlass: The Visual Action Engine</h1>
