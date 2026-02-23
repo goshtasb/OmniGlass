@@ -87,27 +87,33 @@ pub async fn execute_text_command(
         decision.text.as_deref().map(|t| &t[..80.min(t.len())])
     );
 
-    match decision.decision_type.as_str() {
-        "direct" => {
-            log::info!("[TEXT_CMD] Direct response");
-            Ok(TextCommandResult {
-                status: "success".to_string(),
-                text: decision.text.unwrap_or_default(),
-                action_id: None,
-                result_type: "text".to_string(),
-                command: None,
-                file_path: None,
-                file_content: None,
-                clipboard_content: None,
-            })
-        }
-        "tool" => {
-            let tool_id = decision.tool_id.unwrap_or_default();
-            let input = decision.input_text.unwrap_or_else(|| text.clone());
-            log::info!("[TEXT_CMD] Routing to tool: {}", tool_id);
-            route_to_tool(&app, &registry, &tool_id, &input).await
-        }
-        other => Err(format!("Unknown route type: {}", other)),
+    // Local models may use non-standard type names (e.g. "run_command" instead
+    // of "tool"). Normalize: if there's a tool_id, treat as tool; otherwise direct.
+    let is_tool = decision.decision_type == "tool"
+        || decision.tool_id.is_some()
+        || decision.decision_type.contains("command")
+        || decision.decision_type.contains("tool");
+
+    if is_tool {
+        let tool_id = decision.tool_id.unwrap_or_else(|| {
+            // Local model may put the tool name in the type field
+            decision.decision_type.clone()
+        });
+        let input = decision.input_text.or(decision.text).unwrap_or_else(|| text.clone());
+        log::info!("[TEXT_CMD] Routing to tool: {}", tool_id);
+        route_to_tool(&app, &registry, &tool_id, &input).await
+    } else {
+        log::info!("[TEXT_CMD] Direct response");
+        Ok(TextCommandResult {
+            status: "success".to_string(),
+            text: decision.text.unwrap_or_default(),
+            action_id: None,
+            result_type: "text".to_string(),
+            command: None,
+            file_path: None,
+            file_content: None,
+            clipboard_content: None,
+        })
     }
 }
 

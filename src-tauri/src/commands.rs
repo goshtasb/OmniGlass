@@ -172,8 +172,10 @@ pub async fn run_confirmed_command(command: String) -> Result<String, String> {
 ///
 /// Called after `run_confirmed_command` completes. Sends the original user
 /// question + raw command output through the LLM for summarization.
+/// Routes to the active provider (local or cloud).
 #[tauri::command]
 pub async fn summarize_command_output(
+    app: tauri::AppHandle,
     user_question: String,
     command: String,
     raw_output: String,
@@ -188,14 +190,26 @@ pub async fn summarize_command_output(
         raw_output.len()
     );
 
-    // If output is very short, no need to summarize
-    if raw_output.lines().count() <= 2 && raw_output.len() < 120 {
+    // Route to active provider
+    let provider = crate::settings_commands::resolve_provider();
+
+    #[cfg(feature = "local-llm")]
+    if provider == "local" {
+        return summarize_via_local(&app, &user_question, &command, &raw_output).await;
+    }
+    let _ = &app; // suppress unused warning when local-llm disabled
+
+    // For cloud providers: skip summarization only if output is short AND
+    // already human-readable (contains words, not just a raw number/data).
+    let is_short = raw_output.lines().count() <= 2 && raw_output.len() < 120;
+    let is_readable = raw_output.trim().chars().any(|c| c.is_alphabetic());
+    if is_short && is_readable {
         return Ok(raw_output);
     }
 
     let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
     if api_key.is_empty() {
-        return Ok(raw_output); // Fallback to raw output if no key
+        return Ok(raw_output);
     }
 
     let user_message = build_summarize_message(&user_question, &command, &raw_output);
@@ -234,6 +248,39 @@ pub async fn summarize_command_output(
 
     log::info!("[SUMMARIZE] Summary: {} chars", text.len());
     Ok(text.to_string())
+}
+
+/// Summarize command output using the local LLM.
+#[cfg(feature = "local-llm")]
+async fn summarize_via_local(
+    app: &tauri::AppHandle,
+    user_question: &str,
+    command: &str,
+    raw_output: &str,
+) -> Result<String, String> {
+    use tauri::Manager;
+    let state = app.state::<llm::local_state::LocalLlmState>();
+
+    let prompt = format!(
+        "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
+        "You answer the user's question using command output. Give a direct, concise answer (1-3 sentences). Include specific numbers. Convert bytes to GB where appropriate. No JSON, no code blocks, no mentioning commands.",
+        format!(
+            "User asked: {}\nCommand ran: {}\nOutput:\n{}",
+            user_question, command, &raw_output[..3000.min(raw_output.len())]
+        ),
+    );
+
+    match state.generate(&prompt, 256, None).await {
+        Ok(summary) => {
+            let clean = summary.trim().to_string();
+            log::info!("[SUMMARIZE_LOCAL] {} chars", clean.len());
+            Ok(clean)
+        }
+        Err(e) => {
+            log::warn!("[SUMMARIZE_LOCAL] Failed: {} — returning raw output", e);
+            Ok(raw_output.to_string())
+        }
+    }
 }
 
 /// Tauri command: write file content to the user's Desktop.

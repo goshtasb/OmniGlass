@@ -109,9 +109,10 @@ pub async fn execute_action_local(
                     r
                 }
                 Err(e) => {
-                    // If JSON parse fails, wrap raw text as a text result
-                    log::warn!("[LOCAL_EXECUTE] Parse failed: {} — wrapping raw text", e);
-                    ActionResult::text(action_id, &raw)
+                    // Local models often return flat JSON instead of nested ActionResult.
+                    // Try to salvage fields from the flat structure.
+                    log::warn!("[LOCAL_EXECUTE] Structured parse failed: {} — trying flat JSON", e);
+                    salvage_flat_result(action_id, &raw)
                 }
             }
         }
@@ -208,6 +209,149 @@ fn extract_json_str(text: &str) -> &str {
         }
     }
     text
+}
+
+/// Salvage an ActionResult from flat JSON that the local model often produces.
+///
+/// Local models frequently return `{"status":"needs_confirmation","command":"ls -la"}`
+/// instead of the nested `{"status":"...","actionId":"...","result":{"type":"command",...}}`.
+/// This function extracts known fields and builds a proper ActionResult.
+fn salvage_flat_result(action_id: &str, raw: &str) -> ActionResult {
+    let clean = streaming::strip_code_fences(raw);
+    let json_str = extract_json_str(&clean);
+
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(json_str) {
+        let status = v.get("status").and_then(|s| s.as_str()).unwrap_or("success");
+        let command = v.get("command").and_then(|s| s.as_str());
+        let text = v.get("text").and_then(|s| s.as_str());
+        let result_type = v.get("type").and_then(|s| s.as_str());
+
+        // If there's a command field, treat as a command result
+        if let Some(cmd) = command {
+            log::info!("[LOCAL_EXECUTE] Salvaged command result: {}", cmd);
+            return ActionResult {
+                status: status.to_string(),
+                action_id: action_id.to_string(),
+                result: super::execute::ActionResultBody {
+                    result_type: "command".to_string(),
+                    text: text.map(|t| t.to_string()),
+                    file_path: None,
+                    command: Some(cmd.to_string()),
+                    clipboard_content: None,
+                    mime_type: None,
+                },
+                metadata: None,
+            };
+        }
+
+        // If there's a type hint, use it
+        if let Some(rt) = result_type {
+            log::info!("[LOCAL_EXECUTE] Salvaged {} result", rt);
+            return ActionResult {
+                status: status.to_string(),
+                action_id: action_id.to_string(),
+                result: super::execute::ActionResultBody {
+                    result_type: rt.to_string(),
+                    text: text.map(|t| t.to_string()),
+                    file_path: v.get("filePath").and_then(|s| s.as_str()).map(|s| s.to_string()),
+                    command: None,
+                    clipboard_content: v.get("clipboardContent").and_then(|s| s.as_str()).map(|s| s.to_string()),
+                    mime_type: None,
+                },
+                metadata: None,
+            };
+        }
+
+        // Has text content — check if it contains a shell command we can extract
+        if let Some(t) = text {
+            // If the action expects a command, try to extract one from the explanation
+            if is_command_action(action_id) {
+                if let Some(cmd) = extract_command_from_text(t) {
+                    log::info!("[LOCAL_EXECUTE] Extracted command from text: {}", cmd);
+                    return ActionResult {
+                        status: "needs_confirmation".to_string(),
+                        action_id: action_id.to_string(),
+                        result: super::execute::ActionResultBody {
+                            result_type: "command".to_string(),
+                            text: Some(t.to_string()),
+                            file_path: None,
+                            command: Some(cmd),
+                            clipboard_content: None,
+                            mime_type: None,
+                        },
+                        metadata: None,
+                    };
+                }
+            }
+            return ActionResult::text(action_id, t);
+        }
+    }
+
+    // Final fallback for non-JSON: try to extract a command from raw prose
+    if is_command_action(action_id) {
+        if let Some(cmd) = extract_command_from_text(raw) {
+            log::info!("[LOCAL_EXECUTE] Extracted command from raw text: {}", cmd);
+            return ActionResult {
+                status: "needs_confirmation".to_string(),
+                action_id: action_id.to_string(),
+                result: super::execute::ActionResultBody {
+                    result_type: "command".to_string(),
+                    text: None,
+                    file_path: None,
+                    command: Some(cmd),
+                    clipboard_content: None,
+                    mime_type: None,
+                },
+                metadata: None,
+            };
+        }
+    }
+
+    ActionResult::text(action_id, raw)
+}
+
+/// Check if an action ID suggests a command should be returned.
+fn is_command_action(action_id: &str) -> bool {
+    action_id.contains("command")
+        || action_id.contains("run")
+        || action_id.contains("fix")
+        || action_id == "suggest_fix"
+}
+
+/// Try to extract a shell command from explanation text.
+///
+/// Local models often write "Run `sysctl -n hw.memsize`" or put commands in
+/// backtick-fenced blocks instead of the JSON "command" field. Extract it.
+fn extract_command_from_text(text: &str) -> Option<String> {
+    // Try backtick-fenced code block first: ```...\ncommand\n```
+    if let Some(start) = text.find("```") {
+        let after = &text[start + 3..];
+        // Skip optional language tag on the same line
+        let after = if let Some(nl) = after.find('\n') {
+            &after[nl + 1..]
+        } else {
+            after
+        };
+        if let Some(end) = after.find("```") {
+            let cmd = after[..end].trim();
+            if !cmd.is_empty() && cmd.lines().count() <= 3 {
+                return Some(cmd.to_string());
+            }
+        }
+    }
+
+    // Try inline backtick: `command here`
+    if let Some(start) = text.find('`') {
+        let after = &text[start + 1..];
+        if let Some(end) = after.find('`') {
+            let cmd = after[..end].trim();
+            if !cmd.is_empty() && !cmd.contains(' ') || cmd.split_whitespace().count() <= 8 {
+                return Some(cmd.to_string());
+            }
+        }
+    }
+
+    None
 }
 
 /// Fallback ActionMenu when local model fails or returns invalid JSON.

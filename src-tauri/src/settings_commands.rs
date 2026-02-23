@@ -223,6 +223,8 @@ pub fn open_settings(app: tauri::AppHandle) -> Result<(), String> {
     .title("Omni-Glass Settings")
     .inner_size(520.0, 500.0)
     .resizable(true)
+    .always_on_top(true)
+    .center()
     .build()
     .map_err(|e| format!("Failed to create settings window: {}", e))?;
 
