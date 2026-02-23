@@ -184,7 +184,6 @@ Beyond the sandbox:
 
 ## Community
 
-→ **[Discord](https://discord.gg/omniglass)** — plugin ideas, help, show what you built
 
 → **[Discussions](https://github.com/goshtasb/OmniGlass/discussions)** — feature requests, roadmap input
 
