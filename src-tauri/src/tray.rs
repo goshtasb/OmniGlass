@@ -110,14 +110,11 @@ pub fn start_snip_mode(
     }
 
     // Step 1: Capture the full screen
-    let screenshot = capture::capture_primary_monitor()
-        .map_err(|e| format!("Screen capture failed: {}", e))?;
+    let screenshot =
+        capture::capture_primary_monitor().map_err(|e| format!("Screen capture failed: {}", e))?;
 
     let capture_us = start.elapsed().as_micros();
-    log::info!(
-        "[LATENCY] xcap_capture={:.2}ms",
-        capture_us as f64 / 1000.0
-    );
+    log::info!("[LATENCY] xcap_capture={:.2}ms", capture_us as f64 / 1000.0);
 
     // Step 2: Save screenshot to temp PNG file for overlay display.
     let temp_path = std::env::temp_dir().join("omni-glass-capture.png");
@@ -125,13 +122,10 @@ pub fn start_snip_mode(
         .save(&temp_path)
         .map_err(|e| format!("PNG save failed: {}", e))?;
     // Canonicalize to resolve /var → /private/var symlink on macOS.
-    let temp_path = std::fs::canonicalize(&temp_path)
-        .unwrap_or(temp_path);
+    let temp_path = std::fs::canonicalize(&temp_path).unwrap_or(temp_path);
 
     let save_us = start.elapsed().as_micros() - capture_us;
-    let file_size = std::fs::metadata(&temp_path)
-        .map(|m| m.len())
-        .unwrap_or(0);
+    let file_size = std::fs::metadata(&temp_path).map(|m| m.len()).unwrap_or(0);
     log::info!(
         "[LATENCY] png_save={:.2}ms ({} bytes, {})",
         save_us as f64 / 1000.0,
@@ -162,10 +156,7 @@ pub fn start_snip_mode(
     .build()?;
 
     let window_us = start.elapsed().as_micros() - capture_us - save_us;
-    log::info!(
-        "[LATENCY] window_create={:.2}ms",
-        window_us as f64 / 1000.0
-    );
+    log::info!("[LATENCY] window_create={:.2}ms", window_us as f64 / 1000.0);
 
     let total_us = start.elapsed().as_micros();
     log::info!(

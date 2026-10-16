@@ -20,10 +20,7 @@ static BLOCKED_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(||
         ),
         (Regex::new(r"mkfs").unwrap(), "Filesystem formatting"),
         (Regex::new(r"dd\s+if=").unwrap(), "Raw disk write"),
-        (
-            Regex::new(r":()\{\s*:\|:&\s*\};:").unwrap(),
-            "Fork bomb",
-        ),
+        (Regex::new(r":()\{\s*:\|:&\s*\};:").unwrap(), "Fork bomb"),
         (
             Regex::new(r"(?i)chmod\s+777\s+/").unwrap(),
             "Recursive permission change on root",
@@ -36,26 +33,17 @@ static BLOCKED_PATTERNS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(||
             Regex::new(r"(?i)wget.*\|\s*(bash|sh|zsh)").unwrap(),
             "Pipe remote script to shell",
         ),
-        (
-            Regex::new(r">\s*/dev/sd").unwrap(),
-            "Direct disk write",
-        ),
+        (Regex::new(r">\s*/dev/sd").unwrap(), "Direct disk write"),
         (
             Regex::new(r"(?i)(shutdown|reboot|halt)\b").unwrap(),
             "System power command",
         ),
-        (
-            Regex::new(r"(?i)\bpasswd\b").unwrap(),
-            "Password change",
-        ),
+        (Regex::new(r"(?i)\bpasswd\b").unwrap(), "Password change"),
         (
             Regex::new(r"(?i)sudo\s+su").unwrap(),
             "Root shell escalation",
         ),
-        (
-            Regex::new(r"(?i)eval\s*\(").unwrap(),
-            "Eval injection",
-        ),
+        (Regex::new(r"(?i)eval\s*\(").unwrap(), "Eval injection"),
         (
             Regex::new(r"(?i)net\s+user").unwrap(),
             "Windows user manipulation",

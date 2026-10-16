@@ -53,9 +53,13 @@ pub async fn classify_streaming(
         return menu;
     }
 
-    eprintln!("[CLASSIFY] OCR text: {} chars, starting API call...", text.len());
+    eprintln!(
+        "[CLASSIFY] OCR text: {} chars, starting API call...",
+        text.len()
+    );
 
-    let user_message = prompts::build_classify_message(text, confidence, has_table, has_code, plugin_tools);
+    let user_message =
+        prompts::build_classify_message(text, confidence, has_table, has_code, plugin_tools);
 
     log::info!("[LLM] Provider: anthropic (streaming)");
     log::info!("[LLM] Model: {}", MODEL);
@@ -127,10 +131,7 @@ pub async fn classify_streaming(
                         "content_block_delta" => {
                             if let Some(text_delta) = extract_text_delta(&data) {
                                 if !ttft_logged && !text_delta.is_empty() {
-                                    log::info!(
-                                        "[LLM] TTFT: {}ms",
-                                        start.elapsed().as_millis()
-                                    );
+                                    log::info!("[LLM] TTFT: {}ms", start.elapsed().as_millis());
                                     ttft_logged = true;
                                 }
                                 accumulated_text.push_str(&text_delta);
@@ -156,24 +157,18 @@ pub async fn classify_streaming(
                         }
                         "message_start" => {
                             // Extract input token count
-                            if let Ok(json) =
-                                serde_json::from_str::<serde_json::Value>(&data)
-                            {
-                                if let Some(usage) = json
-                                    .get("message")
-                                    .and_then(|m| m.get("usage"))
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) {
+                                if let Some(usage) =
+                                    json.get("message").and_then(|m| m.get("usage"))
                                 {
-                                    input_tokens =
-                                        usage["input_tokens"].as_u64().unwrap_or(0);
+                                    input_tokens = usage["input_tokens"].as_u64().unwrap_or(0);
                                     log::info!("[LLM] Input tokens: {}", input_tokens);
                                 }
                             }
                         }
                         "message_delta" => {
                             // Extract output token count
-                            if let Ok(json) =
-                                serde_json::from_str::<serde_json::Value>(&data)
-                            {
+                            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&data) {
                                 if let Some(usage) = json.get("usage") {
                                     let output_tokens =
                                         usage["output_tokens"].as_u64().unwrap_or(0);
@@ -199,19 +194,35 @@ pub async fn classify_streaming(
     }
 
     let api_ms = start.elapsed().as_millis();
-    eprintln!("[CLASSIFY] Stream complete: {}ms, accumulated {} chars", api_ms, accumulated_text.len());
+    eprintln!(
+        "[CLASSIFY] Stream complete: {}ms, accumulated {} chars",
+        api_ms,
+        accumulated_text.len()
+    );
 
     // Parse the full accumulated text as ActionMenu
     let json_str = streaming::strip_code_fences(&accumulated_text);
     let menu = match serde_json::from_str::<ActionMenu>(&json_str) {
         Ok(menu) => {
-            eprintln!("[CLASSIFY] SUCCESS — {} actions, type={}", menu.actions.len(), menu.content_type);
-            log::info!("[LLM] Parsed {} actions, type={}", menu.actions.len(), menu.content_type);
+            eprintln!(
+                "[CLASSIFY] SUCCESS — {} actions, type={}",
+                menu.actions.len(),
+                menu.content_type
+            );
+            log::info!(
+                "[LLM] Parsed {} actions, type={}",
+                menu.actions.len(),
+                menu.content_type
+            );
             menu
         }
         Err(e) => {
             eprintln!("[CLASSIFY] JSON PARSE FAILED: {}", e);
-            log::warn!("[LLM] Failed to parse ActionMenu: {} — raw: {}", e, &accumulated_text[..accumulated_text.len().min(200)]);
+            log::warn!(
+                "[LLM] Failed to parse ActionMenu: {} — raw: {}",
+                e,
+                &accumulated_text[..accumulated_text.len().min(200)]
+            );
             ActionMenu::fallback()
         }
     };
@@ -229,10 +240,16 @@ pub async fn classify_streaming(
 fn ensure_required_actions(mut menu: ActionMenu, has_table: bool) -> ActionMenu {
     // Check specifically for CSV-related action IDs (not broad "export" match)
     let has_csv_action = menu.actions.iter().any(|a| {
-        a.id.contains("csv") || a.id == "export_csv" || a.id == "export_to_csv" || a.id == "extract_to_csv"
+        a.id.contains("csv")
+            || a.id == "export_csv"
+            || a.id == "export_to_csv"
+            || a.id == "extract_to_csv"
     });
     let has_explain = menu.actions.iter().any(|a| a.id.contains("explain"));
-    let has_fix = menu.actions.iter().any(|a| a.id.contains("fix") || a.id.contains("suggest"));
+    let has_fix = menu
+        .actions
+        .iter()
+        .any(|a| a.id.contains("fix") || a.id.contains("suggest"));
 
     // Inject CSV export if: content is table/kv_pairs OR OCR detected table structure
     let needs_csv = matches!(menu.content_type.as_str(), "table" | "kv_pairs") || has_table;
@@ -246,7 +263,11 @@ fn ensure_required_actions(mut menu: ActionMenu, has_table: bool) -> ActionMenu 
             description: "Extract tabular data and export as CSV file".to_string(),
             requires_execution: true,
         });
-        log::info!("[LLM] Injected export_csv (type={}, has_table={})", menu.content_type, has_table);
+        log::info!(
+            "[LLM] Injected export_csv (type={}, has_table={})",
+            menu.content_type,
+            has_table
+        );
     }
 
     // Error content must always have explain_error and suggest_fix
@@ -300,9 +321,8 @@ pub async fn classify(
         return ActionMenu::fallback();
     }
 
-    let user_message = prompts::build_classify_message(
-        text, confidence, has_table, has_code, plugin_tools,
-    );
+    let user_message =
+        prompts::build_classify_message(text, confidence, has_table, has_code, plugin_tools);
     let start = std::time::Instant::now();
 
     let response = reqwest::Client::new()

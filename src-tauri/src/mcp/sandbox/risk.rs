@@ -27,7 +27,7 @@ pub fn calculate_risk(permissions: &Permissions) -> RiskLevel {
         score += 1;
     }
 
-    if permissions.network.as_ref().map_or(false, |v| !v.is_empty()) {
+    if permissions.network.as_ref().is_some_and(|v| !v.is_empty()) {
         score += 2;
     }
 
@@ -63,7 +63,10 @@ mod tests {
 
     #[test]
     fn clipboard_only_is_low() {
-        let perms = Permissions { clipboard: true, ..Default::default() };
+        let perms = Permissions {
+            clipboard: true,
+            ..Default::default()
+        };
         assert_eq!(calculate_risk(&perms), RiskLevel::Low);
     }
 
@@ -79,7 +82,9 @@ mod tests {
     #[test]
     fn shell_is_high() {
         let perms = Permissions {
-            shell: Some(ShellPerm { commands: vec!["echo".into()] }),
+            shell: Some(ShellPerm {
+                commands: vec!["echo".into()],
+            }),
             ..Default::default()
         };
         assert_eq!(calculate_risk(&perms), RiskLevel::High);
@@ -88,9 +93,10 @@ mod tests {
     #[test]
     fn filesystem_write_is_high() {
         let perms = Permissions {
-            filesystem: Some(vec![
-                FsPerm { path: "~/Documents".into(), access: "read-write".into() },
-            ]),
+            filesystem: Some(vec![FsPerm {
+                path: "~/Documents".into(),
+                access: "read-write".into(),
+            }]),
             ..Default::default()
         };
         assert_eq!(calculate_risk(&perms), RiskLevel::Medium); // 4 = medium

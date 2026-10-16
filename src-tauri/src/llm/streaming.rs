@@ -68,8 +68,8 @@ pub fn strip_code_fences(text: &str) -> String {
             None => trimmed,
         };
         let stripped = after_open.trim_end();
-        if stripped.ends_with("```") {
-            stripped[..stripped.len() - 3].trim().to_string()
+        if let Some(body) = stripped.strip_suffix("```") {
+            body.trim().to_string()
         } else {
             after_open.trim().to_string()
         }

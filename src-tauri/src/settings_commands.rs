@@ -55,7 +55,10 @@ fn has_api_key(provider_id: &str) -> bool {
     };
 
     // Check env var first
-    if std::env::var(env_key).map(|k| !k.is_empty()).unwrap_or(false) {
+    if std::env::var(env_key)
+        .map(|k| !k.is_empty())
+        .unwrap_or(false)
+    {
         return true;
     }
 
@@ -163,8 +166,8 @@ pub async fn test_provider(provider_id: String) -> Result<bool, String> {
             )
         }
         "gemini" => {
-            let key = std::env::var("GEMINI_API_KEY")
-                .map_err(|_| "No GEMINI_API_KEY set".to_string())?;
+            let key =
+                std::env::var("GEMINI_API_KEY").map_err(|_| "No GEMINI_API_KEY set".to_string())?;
             (
                 format!(
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={}",
@@ -244,7 +247,10 @@ pub fn get_ocr_mode() -> String {
 pub fn set_ocr_mode(mode: String) -> Result<(), String> {
     let mode = mode.to_lowercase();
     if mode != "fast" && mode != "accurate" {
-        return Err(format!("Invalid OCR mode: {}. Use 'fast' or 'accurate'.", mode));
+        return Err(format!(
+            "Invalid OCR mode: {}. Use 'fast' or 'accurate'.",
+            mode
+        ));
     }
     std::env::set_var("OCR_MODE", &mode);
     log::info!("[SETTINGS] OCR mode set to: {}", mode);

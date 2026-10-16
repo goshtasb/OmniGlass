@@ -59,10 +59,7 @@ pub async fn approve_plugin(
     let entry = {
         let mut queue = pending.queue.lock().await;
         let idx = queue.iter().position(|(m, _, _)| m.id == plugin_id);
-        match idx {
-            Some(i) => Some(queue.remove(i)),
-            None => None,
-        }
+        idx.map(|i| queue.remove(i))
     };
 
     let mut store = approval::load_approvals();

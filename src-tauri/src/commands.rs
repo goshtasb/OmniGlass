@@ -33,15 +33,17 @@ pub fn crop_region(
     let png_bytes = crate::capture::crop_to_png_bytes(screenshot, x, y, width, height)
         .map_err(|e| e.to_string())?;
 
-    let base64_png = base64::Engine::encode(
-        &base64::engine::general_purpose::STANDARD,
-        &png_bytes,
-    );
+    let base64_png = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &png_bytes);
 
     let crop_ms = start.elapsed().as_millis();
     log::info!(
         "Cropped region ({}x{} at {},{}) in {}ms — {} bytes",
-        width, height, x, y, crop_ms, png_bytes.len()
+        width,
+        height,
+        x,
+        y,
+        crop_ms,
+        png_bytes.len()
     );
 
     Ok(base64_png)
@@ -56,22 +58,16 @@ pub fn get_capture_info(
     state: tauri::State<'_, CaptureState>,
 ) -> Result<crate::capture::CaptureInfo, String> {
     let guard = state.capture_info.lock().map_err(|e| e.to_string())?;
-    guard
-        .clone()
-        .ok_or("No capture info available".to_string())
+    guard.clone().ok_or("No capture info available".to_string())
 }
 
 /// Tauri command: get the OCR text from the last snip.
 ///
 /// Used by action menu to copy text to clipboard.
 #[tauri::command]
-pub fn get_ocr_text(
-    state: tauri::State<'_, llm::ActionMenuState>,
-) -> Result<String, String> {
+pub fn get_ocr_text(state: tauri::State<'_, llm::ActionMenuState>) -> Result<String, String> {
     let guard = state.ocr_text.lock().map_err(|e| e.to_string())?;
-    guard
-        .clone()
-        .ok_or("No OCR text available".to_string())
+    guard.clone().ok_or("No OCR text available".to_string())
 }
 
 /// Tauri command: copy text to the system clipboard.
@@ -81,9 +77,7 @@ pub fn get_ocr_text(
 #[tauri::command]
 pub fn copy_to_clipboard(text: String) -> Result<(), String> {
     let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
-    clipboard
-        .set_text(&text)
-        .map_err(|e| e.to_string())?;
+    clipboard.set_text(&text).map_err(|e| e.to_string())?;
     log::info!("[ACTION] Copied {} chars to clipboard", text.len());
     Ok(())
 }
@@ -123,9 +117,7 @@ pub fn get_action_menu(
     state: tauri::State<'_, llm::ActionMenuState>,
 ) -> Result<llm::ActionMenu, String> {
     let guard = state.menu.lock().map_err(|e| e.to_string())?;
-    guard
-        .clone()
-        .ok_or("No action menu available".to_string())
+    guard.clone().ok_or("No action menu available".to_string())
 }
 
 /// Tauri command: run a confirmed shell command.
@@ -190,7 +182,8 @@ pub async fn summarize_command_output(
         raw_output.len()
     );
 
-    // Route to active provider
+    // Route to active provider (only consulted when the local-llm feature is compiled in)
+    #[cfg_attr(not(feature = "local-llm"), allow(unused_variables))]
     let provider = crate::settings_commands::resolve_provider();
 
     #[cfg(feature = "local-llm")]
@@ -236,8 +229,7 @@ pub async fn summarize_command_output(
     }
 
     let body = resp.text().await.map_err(|e| e.to_string())?;
-    let parsed: serde_json::Value =
-        serde_json::from_str(&body).map_err(|e| e.to_string())?;
+    let parsed: serde_json::Value = serde_json::from_str(&body).map_err(|e| e.to_string())?;
     let text = parsed
         .get("content")
         .and_then(|c| c.as_array())
@@ -296,8 +288,7 @@ pub fn write_to_desktop(filename: String, content: String) -> Result<String, Str
     let desktop = dirs::desktop_dir().ok_or("Could not find Desktop directory")?;
     let path = desktop.join(&filename);
 
-    std::fs::write(&path, &content)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    std::fs::write(&path, &content).map_err(|e| format!("Failed to write file: {}", e))?;
 
     let full_path = path.to_string_lossy().to_string();
     log::info!("[EXECUTE] Wrote file: {}", full_path);
@@ -344,8 +335,7 @@ pub fn start_snip(app: tauri::AppHandle) -> Result<(), String> {
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as f64;
-    crate::tray::start_snip_mode(&app, click_epoch_ms)
-        .map_err(|e| e.to_string())
+    crate::tray::start_snip_mode(&app, click_epoch_ms).map_err(|e| e.to_string())
 }
 
 /// Tauri command: open the text launcher window.
@@ -366,8 +356,7 @@ pub fn write_file_to_path(file_path: String, content: String) -> Result<String, 
         return Err("Unsafe file path".to_string());
     }
 
-    std::fs::write(&file_path, &content)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+    std::fs::write(&file_path, &content).map_err(|e| format!("Failed to write file: {}", e))?;
 
     log::info!("[EXPORT] Wrote file: {}", file_path);
     Ok(file_path)

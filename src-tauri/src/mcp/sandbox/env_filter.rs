@@ -9,9 +9,14 @@ use std::collections::HashMap;
 
 /// Essential vars every runtime needs to function.
 const ESSENTIAL_VARS: &[&str] = &[
-    "PATH", "HOME", "USER", "LANG", "TERM", "SHELL",
-    "NODE_PATH",    // Node.js module resolution
-    "PYTHONPATH",   // Python module resolution
+    "PATH",
+    "HOME",
+    "USER",
+    "LANG",
+    "TERM",
+    "SHELL",
+    "NODE_PATH",  // Node.js module resolution
+    "PYTHONPATH", // Python module resolution
 ];
 
 /// Filter the process environment for a plugin, passing only safe variables.
@@ -20,10 +25,7 @@ const ESSENTIAL_VARS: &[&str] = &[
 /// 2. Always sets OMNI_GLASS_PLUGIN_ID and a plugin-specific TMPDIR
 /// 3. Includes only env vars explicitly declared in permissions.environment
 /// 4. NEVER passes API keys, tokens, or secrets unless explicitly declared
-pub fn filter_environment(
-    permissions: &Permissions,
-    plugin_id: &str,
-) -> HashMap<String, String> {
+pub fn filter_environment(permissions: &Permissions, plugin_id: &str) -> HashMap<String, String> {
     let mut filtered = HashMap::new();
 
     // Essential runtime vars from the current process environment

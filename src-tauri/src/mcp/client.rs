@@ -47,7 +47,10 @@ impl McpServer {
         }
 
         let mut child = cmd.spawn().map_err(|e| {
-            format!("Failed to spawn MCP server '{}' ({}): {}", plugin_id, command, e)
+            format!(
+                "Failed to spawn MCP server '{}' ({}): {}",
+                plugin_id, command, e
+            )
         })?;
 
         let stdin = child
@@ -82,11 +85,18 @@ impl McpServer {
         sandbox_profile_path: &std::path::Path,
         plugin_dir: &std::path::Path,
     ) -> Result<Self, String> {
-        let profile_str = sandbox_profile_path.to_str()
+        let profile_str = sandbox_profile_path
+            .to_str()
             .ok_or("Invalid sandbox profile path")?;
         let mut sandbox_args = vec!["-f", profile_str, command];
         sandbox_args.extend(args);
-        Self::spawn(plugin_id, "sandbox-exec", &sandbox_args, env, Some(plugin_dir))
+        Self::spawn(
+            plugin_id,
+            "sandbox-exec",
+            &sandbox_args,
+            env,
+            Some(plugin_dir),
+        )
     }
 
     /// Send the initialize handshake and notifications/initialized notification.
@@ -140,7 +150,11 @@ impl McpServer {
             "[MCP] '{}' exposes {} tools: [{}]",
             self.plugin_id,
             tools.len(),
-            tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(", ")
+            tools
+                .iter()
+                .map(|t| t.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
 
         Ok(tools)
@@ -170,17 +184,15 @@ impl McpServer {
         let _ = self.stdin.shutdown().await;
 
         // Give the process a moment to exit gracefully
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(3),
-            self.child.wait(),
-        )
-        .await
-        {
+        match tokio::time::timeout(std::time::Duration::from_secs(3), self.child.wait()).await {
             Ok(Ok(status)) => {
                 log::info!("[MCP] '{}' exited: {}", self.plugin_id, status);
             }
             _ => {
-                log::warn!("[MCP] '{}' did not exit gracefully, killing", self.plugin_id);
+                log::warn!(
+                    "[MCP] '{}' did not exit gracefully, killing",
+                    self.plugin_id
+                );
                 let _ = self.child.kill().await;
             }
         }
@@ -227,8 +239,8 @@ impl McpServer {
 
     /// Write a single NDJSON line to the child's stdin.
     async fn send_message(&mut self, value: &serde_json::Value) -> Result<(), String> {
-        let mut line = serde_json::to_string(value)
-            .map_err(|e| format!("JSON serialize failed: {}", e))?;
+        let mut line =
+            serde_json::to_string(value).map_err(|e| format!("JSON serialize failed: {}", e))?;
         line.push('\n');
 
         self.stdin
@@ -252,11 +264,10 @@ impl McpServer {
             let mut line = String::new();
             loop {
                 line.clear();
-                let n = self
-                    .stdout
-                    .read_line(&mut line)
-                    .await
-                    .map_err(|e| format!("[MCP] '{}' stdout read failed: {}", self.plugin_id, e))?;
+                let n =
+                    self.stdout.read_line(&mut line).await.map_err(|e| {
+                        format!("[MCP] '{}' stdout read failed: {}", self.plugin_id, e)
+                    })?;
 
                 if n == 0 {
                     return Err(format!(

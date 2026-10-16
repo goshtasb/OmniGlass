@@ -56,7 +56,8 @@ pub async fn classify_streaming_gemini(
         return menu;
     }
 
-    let user_message = super::prompts::build_classify_message(text, confidence, has_table, has_code, plugin_tools);
+    let user_message =
+        super::prompts::build_classify_message(text, confidence, has_table, has_code, plugin_tools);
 
     log::info!("[LLM] Provider: gemini (streaming)");
     log::info!("[LLM] Model: {}", GEMINI_MODEL);
@@ -140,10 +141,7 @@ pub async fn classify_streaming_gemini(
                     // Extract text from candidates[0].content.parts[0].text
                     if let Some(text_delta) = extract_gemini_text(&data) {
                         if !ttft_logged && !text_delta.is_empty() {
-                            log::info!(
-                                "[LLM] TTFT: {}ms",
-                                start.elapsed().as_millis()
-                            );
+                            log::info!("[LLM] TTFT: {}ms", start.elapsed().as_millis());
                             ttft_logged = true;
                         }
                         accumulated_text.push_str(&text_delta);
@@ -208,7 +206,10 @@ pub async fn classify_streaming_gemini(
             for action in &menu.actions {
                 log::info!(
                     "[LLM]   #{} {} ({}): {}",
-                    action.priority, action.label, action.id, action.description
+                    action.priority,
+                    action.label,
+                    action.id,
+                    action.description
                 );
             }
             log::info!("[LLM] JSON enforcement: responseMimeType (no fence stripping)");

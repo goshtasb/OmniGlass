@@ -76,9 +76,7 @@ pub async fn download_local_model(
 
 /// Tauri command: delete a downloaded local model.
 #[tauri::command]
-pub fn delete_local_model(
-    #[allow(unused_variables)] model_id: String,
-) -> Result<(), String> {
+pub fn delete_local_model(#[allow(unused_variables)] model_id: String) -> Result<(), String> {
     #[cfg(feature = "local-llm")]
     {
         let model = crate::llm::model_registry::find_model(&model_id)

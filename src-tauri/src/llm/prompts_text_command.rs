@@ -27,18 +27,12 @@ pub const TEXT_COMMAND_SYSTEM_PROMPT: &str = r#"You are the command router for O
 </response_format>"#;
 
 /// Build the user message for a text command, including available tools.
-pub fn build_text_command_message(
-    user_text: &str,
-    available_tools: &str,
-) -> String {
+pub fn build_text_command_message(user_text: &str, available_tools: &str) -> String {
     let tools_section = if available_tools.is_empty() {
         "No external tools available.".to_string()
     } else {
         format!("Available tools:\n{}", available_tools)
     };
 
-    format!(
-        "{}\n\nUser command:\n{}",
-        tools_section, user_text
-    )
+    format!("{}\n\nUser command:\n{}", tools_section, user_text)
 }

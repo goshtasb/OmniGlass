@@ -42,15 +42,11 @@ pub fn downloaded_model_ids() -> Vec<String> {
 ///
 /// Supports resumption: if a partial file exists, sends a Range header.
 /// Returns the path to the downloaded file on success.
-pub async fn download_model(
-    model: &ModelInfo,
-    app: &tauri::AppHandle,
-) -> Result<PathBuf, String> {
+pub async fn download_model(model: &ModelInfo, app: &tauri::AppHandle) -> Result<PathBuf, String> {
     use tauri::Emitter;
 
     let dir = models_dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Failed to create models dir: {}", e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create models dir: {}", e))?;
 
     let dest = dir.join(model.filename);
     let partial = dir.join(format!("{}.partial", model.filename));
@@ -98,8 +94,7 @@ pub async fn download_model(
             .open(&partial)
             .map_err(|e| format!("Failed to open partial file: {}", e))?
     } else {
-        std::fs::File::create(&partial)
-            .map_err(|e| format!("Failed to create file: {}", e))?
+        std::fs::File::create(&partial).map_err(|e| format!("Failed to create file: {}", e))?
     };
 
     // Stream the response body in chunks, emitting progress events.
@@ -132,8 +127,7 @@ pub async fn download_model(
     }
 
     // Rename .partial to final filename
-    std::fs::rename(&partial, &dest)
-        .map_err(|e| format!("Failed to finalize download: {}", e))?;
+    std::fs::rename(&partial, &dest).map_err(|e| format!("Failed to finalize download: {}", e))?;
 
     log::info!("[MODEL] Download complete: {}", dest.display());
     Ok(dest)
@@ -180,8 +174,7 @@ pub fn verify_model_hash(path: &Path, expected_hash: &str) -> Result<(), String>
 pub fn delete_model(model: &ModelInfo) -> Result<(), String> {
     let path = model_path(model);
     if path.exists() {
-        std::fs::remove_file(&path)
-            .map_err(|e| format!("Failed to delete model: {}", e))?;
+        std::fs::remove_file(&path).map_err(|e| format!("Failed to delete model: {}", e))?;
         log::info!("[MODEL] Deleted: {}", path.display());
     }
     // Also clean up any partial downloads

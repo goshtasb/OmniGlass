@@ -72,9 +72,7 @@ pub async fn execute_text_command(
             let local_state = app.state::<llm::local_state::LocalLlmState>();
             llm::local::execute_text_command_local(&text, &tools_prompt, &local_state).await?
         }
-        _ => {
-            route_via_anthropic(&text, &tools_prompt).await?
-        }
+        _ => route_via_anthropic(&text, &tools_prompt).await?,
     };
 
     let decision: RouteDecision = serde_json::from_str(&json_text)
@@ -99,7 +97,10 @@ pub async fn execute_text_command(
             // Local model may put the tool name in the type field
             decision.decision_type.clone()
         });
-        let input = decision.input_text.or(decision.text).unwrap_or_else(|| text.clone());
+        let input = decision
+            .input_text
+            .or(decision.text)
+            .unwrap_or_else(|| text.clone());
         log::info!("[TEXT_CMD] Routing to tool: {}", tool_id);
         route_to_tool(&app, &registry, &tool_id, &input).await
     } else {
@@ -128,8 +129,16 @@ async fn route_to_tool(
     let bare_id = tool_id
         .rsplit_once("::")
         .map(|(_, name)| name)
-        .unwrap_or_else(|| tool_id.rsplit_once(':').map(|(_, name)| name).unwrap_or(tool_id));
-    eprintln!("[TEXT_CMD] Dispatching tool: raw={}, bare={}", tool_id, bare_id);
+        .unwrap_or_else(|| {
+            tool_id
+                .rsplit_once(':')
+                .map(|(_, name)| name)
+                .unwrap_or(tool_id)
+        });
+    eprintln!(
+        "[TEXT_CMD] Dispatching tool: raw={}, bare={}",
+        tool_id, bare_id
+    );
 
     let result = if registry.is_plugin_action(tool_id).await {
         // Plugin tool — use MCP dispatch with args bridge
@@ -176,8 +185,8 @@ async fn route_to_tool(
 async fn route_via_anthropic(text: &str, tools_prompt: &str) -> Result<String, String> {
     let user_message = prompts_text_command::build_text_command_message(text, tools_prompt);
 
-    let api_key = std::env::var("ANTHROPIC_API_KEY")
-        .map_err(|_| "No API key configured".to_string())?;
+    let api_key =
+        std::env::var("ANTHROPIC_API_KEY").map_err(|_| "No API key configured".to_string())?;
     if api_key.is_empty() {
         return Err("No API key configured".to_string());
     }
@@ -205,7 +214,10 @@ async fn route_via_anthropic(text: &str, tools_prompt: &str) -> Result<String, S
 
     let body = resp.text().await.map_err(|e| e.to_string())?;
     let response_text = extract_text(&body)?;
-    eprintln!("[TEXT_CMD] Raw router response: {}", &response_text[..300.min(response_text.len())]);
+    eprintln!(
+        "[TEXT_CMD] Raw router response: {}",
+        &response_text[..300.min(response_text.len())]
+    );
     Ok(streaming::strip_code_fences(&response_text))
 }
 

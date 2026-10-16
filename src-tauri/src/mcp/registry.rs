@@ -37,6 +37,12 @@ pub struct ToolRegistry {
     tools: Mutex<HashMap<String, RegisteredTool>>,
 }
 
+impl Default for ToolRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {
@@ -57,9 +63,7 @@ impl ToolRegistry {
                 .map(|w| {
                     let mut c = w.chars();
                     match c.next() {
-                        Some(first) => {
-                            first.to_uppercase().to_string() + c.as_str()
-                        }
+                        Some(first) => first.to_uppercase().to_string() + c.as_str(),
                         None => String::new(),
                     }
                 })
@@ -185,9 +189,9 @@ impl ToolRegistry {
 
         // Call on the plugin's MCP server
         let mut servers = self.servers.lock().await;
-        let server = servers.get_mut(&tool.plugin_id).ok_or_else(|| {
-            format!("No running server for plugin '{}'", tool.plugin_id)
-        })?;
+        let server = servers
+            .get_mut(&tool.plugin_id)
+            .ok_or_else(|| format!("No running server for plugin '{}'", tool.plugin_id))?;
         server.call_tool(&tool.name, arguments).await
     }
 }

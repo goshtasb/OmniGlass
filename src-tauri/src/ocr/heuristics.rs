@@ -51,9 +51,11 @@ pub fn detect_table_structure(text: &str) -> bool {
             let aligned_count = space_positions
                 .iter()
                 .filter(|positions| {
-                    positions
-                        .iter()
-                        .any(|p| first_positions.iter().any(|fp| (*p as i64 - *fp as i64).unsigned_abs() <= 2))
+                    positions.iter().any(|p| {
+                        first_positions
+                            .iter()
+                            .any(|fp| (*p as i64 - *fp as i64).unsigned_abs() <= 2)
+                    })
                 })
                 .count();
             if aligned_count > total / 2 {
@@ -75,10 +77,22 @@ pub fn detect_code_structure(text: &str) -> bool {
         &|t: &str| {
             t.lines().any(|l| {
                 let trimmed = l.trim();
-                ["import ", "from ", "const ", "let ", "var ", "function ",
-                 "def ", "class ", "if ", "for ", "while ", "return "]
-                    .iter()
-                    .any(|kw| trimmed.starts_with(kw))
+                [
+                    "import ",
+                    "from ",
+                    "const ",
+                    "let ",
+                    "var ",
+                    "function ",
+                    "def ",
+                    "class ",
+                    "if ",
+                    "for ",
+                    "while ",
+                    "return ",
+                ]
+                .iter()
+                .any(|kw| trimmed.starts_with(kw))
             })
         },
         // Lines ending with brackets/semicolons
@@ -90,25 +104,33 @@ pub fn detect_code_structure(text: &str) -> bool {
         },
         // Indented control flow
         &|t: &str| {
-            t.lines().any(|l| {
-                l.starts_with("  ") || l.starts_with('\t')
-            }) && t.lines().filter(|l| l.starts_with("  ") || l.starts_with('\t')).count() > 1
+            t.lines()
+                .any(|l| l.starts_with("  ") || l.starts_with('\t'))
+                && t.lines()
+                    .filter(|l| l.starts_with("  ") || l.starts_with('\t'))
+                    .count()
+                    > 1
         },
         // Error/traceback markers
         &|t: &str| {
             t.lines().any(|l| {
                 let trimmed = l.trim();
-                trimmed.starts_with("Error") || trimmed.starts_with("Traceback")
-                    || trimmed.starts_with("Exception") || trimmed.starts_with("at ")
-                    || trimmed.contains("error[E") || trimmed.contains("panic!")
+                trimmed.starts_with("Error")
+                    || trimmed.starts_with("Traceback")
+                    || trimmed.starts_with("Exception")
+                    || trimmed.starts_with("at ")
+                    || trimmed.contains("error[E")
+                    || trimmed.contains("panic!")
             })
         },
         // Comments
         &|t: &str| {
             t.lines().any(|l| {
                 let trimmed = l.trim();
-                trimmed.starts_with("//") || trimmed.starts_with('#')
-                    || trimmed.starts_with("/*") || trimmed.starts_with('*')
+                trimmed.starts_with("//")
+                    || trimmed.starts_with('#')
+                    || trimmed.starts_with("/*")
+                    || trimmed.starts_with('*')
             })
         },
     ];
