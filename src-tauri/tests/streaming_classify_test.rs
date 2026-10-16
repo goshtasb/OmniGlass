@@ -91,10 +91,16 @@ ModuleNotFoundError: No module named 'pandas'"#;
     }
 
     let elapsed = start.elapsed().as_millis();
-    eprintln!("[TEST] Stream complete: {}ms, {} chunks, {} chars accumulated",
-        elapsed, chunk_count, accumulated_text.len());
-    eprintln!("[TEST] Accumulated text preview: {}",
-        &accumulated_text[..accumulated_text.len().min(200)]);
+    eprintln!(
+        "[TEST] Stream complete: {}ms, {} chunks, {} chars accumulated",
+        elapsed,
+        chunk_count,
+        accumulated_text.len()
+    );
+    eprintln!(
+        "[TEST] Accumulated text preview: {}",
+        &accumulated_text[..accumulated_text.len().min(200)]
+    );
 
     // Verify we got actual content
     assert!(
@@ -107,8 +113,12 @@ ModuleNotFoundError: No module named 'pandas'"#;
     let menu: ActionMenu = serde_json::from_str(&json_str)
         .unwrap_or_else(|e| panic!("JSON parse failed: {}. Raw: {}", e, accumulated_text));
 
-    eprintln!("[TEST] Parsed: content_type={}, summary={}, actions={}",
-        menu.content_type, menu.summary, menu.actions.len());
+    eprintln!(
+        "[TEST] Parsed: content_type={}, summary={}, actions={}",
+        menu.content_type,
+        menu.summary,
+        menu.actions.len()
+    );
 
     assert_ne!(menu.content_type, "unknown");
     assert_ne!(menu.summary, "Could not analyze content");

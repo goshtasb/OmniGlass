@@ -20,16 +20,11 @@ mod windows_ocr;
 /// Maps to VNRequestTextRecognitionLevel on macOS.
 /// On Windows, both levels use the same WinRT engine
 /// (Windows.Media.Ocr doesn't expose accuracy levels).
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum RecognitionLevel {
     Accurate = 0,
+    #[default]
     Fast = 1,
-}
-
-impl Default for RecognitionLevel {
-    fn default() -> Self {
-        RecognitionLevel::Fast
-    }
 }
 
 /// Result of OCR processing — platform-independent.

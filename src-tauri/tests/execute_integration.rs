@@ -66,7 +66,9 @@ ModuleNotFoundError: No module named 'fake_module'"#;
     // Should mention the module or the error
     let text_lower = text.to_lowercase();
     assert!(
-        text_lower.contains("module") || text_lower.contains("import") || text_lower.contains("fake_module"),
+        text_lower.contains("module")
+            || text_lower.contains("import")
+            || text_lower.contains("fake_module"),
         "Explanation doesn't mention the error cause"
     );
 }
@@ -105,7 +107,11 @@ ModuleNotFoundError: No module named 'pandas'"#;
     assert_eq!(result.status, "needs_confirmation");
     assert_eq!(result.result.result_type, "command");
 
-    let command = result.result.command.as_ref().expect("Should have a command");
+    let command = result
+        .result
+        .command
+        .as_ref()
+        .expect("Should have a command");
     assert!(
         command.contains("pip") || command.contains("install") || command.contains("pandas"),
         "Command should install pandas: {}",
@@ -167,7 +173,11 @@ Widget D   | $18.75 | 42"#;
         "CSV should contain data from the table"
     );
 
-    let file_path = result.result.file_path.as_ref().expect("Should have filename");
+    let file_path = result
+        .result
+        .file_path
+        .as_ref()
+        .expect("Should have filename");
     assert!(
         file_path.ends_with(".csv"),
         "File should be .csv: {}",
@@ -205,12 +215,19 @@ X-RateLimit-Reset: 1708444800"#;
     assert_eq!(result.status, "success");
     assert_eq!(result.result.result_type, "text");
 
-    let explanation = result.result.text.as_ref().expect("Should have explanation");
+    let explanation = result
+        .result
+        .text
+        .as_ref()
+        .expect("Should have explanation");
     assert!(explanation.len() > 20, "Explanation too short");
 
     let lower = explanation.to_lowercase();
     assert!(
-        lower.contains("rate") || lower.contains("limit") || lower.contains("429") || lower.contains("request"),
+        lower.contains("rate")
+            || lower.contains("limit")
+            || lower.contains("429")
+            || lower.contains("request"),
         "Should mention rate limiting"
     );
 }
@@ -247,7 +264,10 @@ async fn test_redaction_ssn_before_llm_call() {
     let result = execute_action_anthropic("explain_error", text_with_ssn).await;
     let latency_ms = start.elapsed().as_millis();
 
-    println!("[TEST 5] explain_error (with SSN) latency: {}ms", latency_ms);
+    println!(
+        "[TEST 5] explain_error (with SSN) latency: {}ms",
+        latency_ms
+    );
     println!("[TEST 5] status: {}", result.status);
     println!(
         "[TEST 5] text: {}",
@@ -294,15 +314,21 @@ async fn test_injection_resistance_classify_normally() {
 
     assert_valid_result(&result);
     // Should return a valid result (success or error), not follow injection
-    assert_ne!(result.status, "needs_confirmation",
-        "Injection should not produce a command result for explain_error");
+    assert_ne!(
+        result.status, "needs_confirmation",
+        "Injection should not produce a command result for explain_error"
+    );
 
     // If it returned a command result type (it shouldn't for explain_error),
     // verify the command is safe
     if result.result.result_type == "command" {
         if let Some(ref cmd) = result.result.command {
             let check = command_check::is_command_safe(cmd);
-            assert!(check.safe, "Any suggested command must pass safety: {}", cmd);
+            assert!(
+                check.safe,
+                "Any suggested command must pass safety: {}",
+                cmd
+            );
         }
     }
 

@@ -29,7 +29,10 @@ async fn e2e_load_classify_execute() {
     // Stage 1: Load model
     let load_start = std::time::Instant::now();
     let state = LocalLlmState::new();
-    state.load(&model_path, model.id).await.expect("Model load failed");
+    state
+        .load(&model_path, model.id)
+        .await
+        .expect("Model load failed");
     let load_ms = load_start.elapsed().as_millis();
     eprintln!("[BENCH] Model load: {}ms", load_ms);
 
@@ -38,31 +41,43 @@ async fn e2e_load_classify_execute() {
     // Stage 2: CLASSIFY — simulated error message (no grammar — disabled due to crash bug)
     let test_text = "TypeError: Cannot read properties of undefined (reading 'map')\n    at UserList (UserList.tsx:42:18)\n    at renderWithHooks (react-dom.development.js:16305)";
 
-    let classify_prompt = prompts_local::build_local_classify_prompt(
-        test_text, 0.92, false, true, "",
-    );
+    let classify_prompt =
+        prompts_local::build_local_classify_prompt(test_text, 0.92, false, true, "");
 
     let classify_start = std::time::Instant::now();
     let classify_result = state
-        .generate(&classify_prompt, prompts_local::LOCAL_CLASSIFY_MAX_TOKENS, None)
+        .generate(
+            &classify_prompt,
+            prompts_local::LOCAL_CLASSIFY_MAX_TOKENS,
+            None,
+        )
         .await;
     let classify_ms = classify_start.elapsed().as_millis();
     eprintln!("[BENCH] CLASSIFY: {}ms", classify_ms);
 
     let classify_ok = match &classify_result {
         Ok(json) => {
-            eprintln!("[BENCH] CLASSIFY raw ({} chars): {}", json.len(), &json[..json.len().min(500)]);
+            eprintln!(
+                "[BENCH] CLASSIFY raw ({} chars): {}",
+                json.len(),
+                &json[..json.len().min(500)]
+            );
             let parsed: Result<serde_json::Value, _> = serde_json::from_str(json);
             match parsed {
                 Ok(v) => {
-                    eprintln!("[BENCH] CLASSIFY parsed OK — contentType: {:?}", v.get("contentType"));
+                    eprintln!(
+                        "[BENCH] CLASSIFY parsed OK — contentType: {:?}",
+                        v.get("contentType")
+                    );
                     let actions = v.get("actions").and_then(|a| a.as_array());
                     if let Some(actions) = actions {
                         eprintln!("[BENCH] CLASSIFY actions: {}", actions.len());
                         for a in actions {
-                            eprintln!("  - {} ({})",
+                            eprintln!(
+                                "  - {} ({})",
                                 a.get("label").and_then(|l| l.as_str()).unwrap_or("?"),
-                                a.get("id").and_then(|i| i.as_str()).unwrap_or("?"));
+                                a.get("id").and_then(|i| i.as_str()).unwrap_or("?")
+                            );
                         }
                     }
                     true
@@ -78,33 +93,51 @@ async fn e2e_load_classify_execute() {
             false
         }
     };
-    assert!(classify_result.is_ok(), "CLASSIFY generation should succeed");
+    assert!(
+        classify_result.is_ok(),
+        "CLASSIFY generation should succeed"
+    );
 
     // Stage 3: EXECUTE — explain error (no grammar)
-    let execute_prompt = prompts_execute_local::build_local_execute_prompt(
-        "explain_error", test_text, "macos",
-    );
+    let execute_prompt =
+        prompts_execute_local::build_local_execute_prompt("explain_error", test_text, "macos");
 
     let execute_start = std::time::Instant::now();
     let execute_result = state
-        .generate(&execute_prompt, prompts_execute_local::LOCAL_EXECUTE_MAX_TOKENS, None)
+        .generate(
+            &execute_prompt,
+            prompts_execute_local::LOCAL_EXECUTE_MAX_TOKENS,
+            None,
+        )
         .await;
     let execute_ms = execute_start.elapsed().as_millis();
     eprintln!("[BENCH] EXECUTE: {}ms", execute_ms);
 
     let execute_ok = match &execute_result {
         Ok(text) => {
-            eprintln!("[BENCH] EXECUTE raw ({} chars): {}", text.len(), &text[..text.len().min(500)]);
+            eprintln!(
+                "[BENCH] EXECUTE raw ({} chars): {}",
+                text.len(),
+                &text[..text.len().min(500)]
+            );
             let parsed: Result<serde_json::Value, _> = serde_json::from_str(text);
             match parsed {
                 Ok(v) => {
-                    eprintln!("[BENCH] EXECUTE parsed as JSON — status: {:?}", v.get("status"));
+                    eprintln!(
+                        "[BENCH] EXECUTE parsed as JSON — status: {:?}",
+                        v.get("status")
+                    );
                     true
                 }
                 Err(_) => {
-                    eprintln!("[BENCH] EXECUTE returned prose (not JSON) — wrapping as text result");
+                    eprintln!(
+                        "[BENCH] EXECUTE returned prose (not JSON) — wrapping as text result"
+                    );
                     // This is fine — the production code wraps prose as a text ActionResult
-                    text.contains("TypeError") || text.contains("undefined") || text.contains("error") || text.len() > 50
+                    text.contains("TypeError")
+                        || text.contains("undefined")
+                        || text.contains("error")
+                        || text.len() > 50
                 }
             }
         }
@@ -128,7 +161,11 @@ async fn e2e_load_classify_execute() {
 
     let text_ok = match &text_result {
         Ok(text) => {
-            eprintln!("[BENCH] TEXT_CMD raw ({} chars): {}", text.len(), &text[..text.len().min(300)]);
+            eprintln!(
+                "[BENCH] TEXT_CMD raw ({} chars): {}",
+                text.len(),
+                &text[..text.len().min(300)]
+            );
             // Check if it contains "4" somewhere (the answer to 2+2)
             let has_answer = text.contains('4');
             eprintln!("[BENCH] TEXT_CMD contains answer '4': {}", has_answer);
@@ -148,9 +185,18 @@ async fn e2e_load_classify_execute() {
     eprintln!("Grammar:   DISABLED (llama-cpp-2 v0.1.135 crash bug)");
     eprintln!("Load:      {}ms", load_ms);
     eprintln!("CLASSIFY:  {}ms (valid JSON: {})", classify_ms, classify_ok);
-    eprintln!("EXECUTE:   {}ms (useful output: {})", execute_ms, execute_ok);
+    eprintln!(
+        "EXECUTE:   {}ms (useful output: {})",
+        execute_ms, execute_ok
+    );
     eprintln!("TEXT_CMD:  {}ms (useful output: {})", text_ms, text_ok);
-    eprintln!("Pipeline:  {}ms (CLASSIFY + EXECUTE, excludes model load)", classify_ms + execute_ms);
-    eprintln!("Total:     {}ms (all stages including model load)", total_ms);
+    eprintln!(
+        "Pipeline:  {}ms (CLASSIFY + EXECUTE, excludes model load)",
+        classify_ms + execute_ms
+    );
+    eprintln!(
+        "Total:     {}ms (all stages including model load)",
+        total_ms
+    );
     eprintln!("========================\n");
 }

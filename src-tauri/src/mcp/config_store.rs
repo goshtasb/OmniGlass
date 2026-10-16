@@ -37,18 +37,13 @@ pub fn load_config(plugin_id: &str) -> HashMap<String, Value> {
 /// Persist all configuration values for a plugin.
 ///
 /// Creates the config directory if it doesn't exist.
-pub fn save_config(
-    plugin_id: &str,
-    config: &HashMap<String, Value>,
-) -> Result<(), String> {
+pub fn save_config(plugin_id: &str, config: &HashMap<String, Value>) -> Result<(), String> {
     let dir = config_dir();
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| format!("Failed to create config dir: {}", e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create config dir: {}", e))?;
     let path = config_path(plugin_id);
     let json = serde_json::to_string_pretty(config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
-    std::fs::write(&path, json)
-        .map_err(|e| format!("Failed to write config: {}", e))?;
+    std::fs::write(&path, json).map_err(|e| format!("Failed to write config: {}", e))?;
     log::info!("[CONFIG] Saved config for plugin '{}'", plugin_id);
     Ok(())
 }

@@ -24,7 +24,6 @@ pub mod model_manager;
 #[cfg(feature = "local-llm")]
 pub mod model_registry;
 pub mod plugin_args;
-pub mod provider;
 pub mod prompts;
 pub mod prompts_execute;
 #[cfg(feature = "local-llm")]
@@ -32,6 +31,7 @@ pub mod prompts_execute_local;
 #[cfg(feature = "local-llm")]
 pub mod prompts_local;
 pub mod prompts_text_command;
+pub mod provider;
 pub mod streaming;
 pub mod types;
 
@@ -58,5 +58,11 @@ impl ActionMenuState {
             ocr_text: Mutex::new(None),
             crop_png: Mutex::new(None),
         }
+    }
+}
+
+impl Default for ActionMenuState {
+    fn default() -> Self {
+        Self::new()
     }
 }

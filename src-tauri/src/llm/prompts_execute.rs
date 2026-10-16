@@ -183,14 +183,14 @@ Rules:
 pub const SUMMARIZE_MAX_TOKENS: u32 = 256;
 
 /// Build the user message for summarizing command output.
-pub fn build_summarize_message(
-    user_question: &str,
-    command: &str,
-    raw_output: &str,
-) -> String {
+pub fn build_summarize_message(user_question: &str, command: &str, raw_output: &str) -> String {
     // Truncate output to avoid hitting token limits
     let output_preview = if raw_output.len() > 3000 {
-        format!("{}...\n[truncated, {} total chars]", &raw_output[..3000], raw_output.len())
+        format!(
+            "{}...\n[truncated, {} total chars]",
+            &raw_output[..3000],
+            raw_output.len()
+        )
     } else {
         raw_output.to_string()
     };
@@ -209,17 +209,17 @@ Summarize this output to directly answer the user's question."#
 
 /// Build the user message for an EXECUTE call by selecting the
 /// appropriate action template and filling in placeholders.
-pub fn build_execute_message(
-    action_id: &str,
-    extracted_text: &str,
-    platform: &str,
-) -> String {
+pub fn build_execute_message(action_id: &str, extracted_text: &str, platform: &str) -> String {
     let template = match action_id {
         "explain_error" | "explain_script" | "explain_code" => PROMPT_EXPLAIN_ERROR,
         "explain" | "explain_this" | "review_ocr" => PROMPT_EXPLAIN,
-        "suggest_fix" | "fix_error" | "fix_syntax" | "fix_code" | "format_code" => PROMPT_SUGGEST_FIX,
+        "suggest_fix" | "fix_error" | "fix_syntax" | "fix_code" | "format_code" => {
+            PROMPT_SUGGEST_FIX
+        }
         "run_command" | "run_system_command" | "execute_command" => PROMPT_RUN_COMMAND,
-        "export_csv" | "export_to_csv" | "extract_to_csv" | "extract_data" | "extract_csv" => PROMPT_EXPORT_CSV,
+        "export_csv" | "export_to_csv" | "extract_to_csv" | "extract_data" | "extract_csv" => {
+            PROMPT_EXPORT_CSV
+        }
         "translate_text" | "translate" => PROMPT_TRANSLATE,
         _ => PROMPT_EXPLAIN, // default fallback
     };

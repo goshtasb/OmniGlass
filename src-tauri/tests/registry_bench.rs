@@ -63,8 +63,8 @@ fn benchmark_approval_check() {
 
 #[test]
 fn benchmark_env_filter() {
-    use omni_glass_lib::mcp::sandbox::env_filter;
     use omni_glass_lib::mcp::manifest::Permissions;
+    use omni_glass_lib::mcp::sandbox::env_filter;
 
     let perms = Permissions::default();
 
@@ -87,8 +87,8 @@ fn benchmark_env_filter() {
 #[test]
 #[cfg(target_os = "macos")]
 fn benchmark_profile_generation() {
-    use omni_glass_lib::mcp::sandbox::macos;
     use omni_glass_lib::mcp::manifest::{Permissions, PluginManifest, Runtime};
+    use omni_glass_lib::mcp::sandbox::macos;
 
     let manifest = PluginManifest {
         id: "com.benchmark.test".to_string(),

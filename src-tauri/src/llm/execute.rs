@@ -91,10 +91,7 @@ impl ActionResult {
 /// 3. Call Claude (non-streaming — accumulate full response)
 /// 4. Parse ActionResult JSON
 /// 5. Post-flight: validate command safety
-pub async fn execute_action_anthropic(
-    action_id: &str,
-    extracted_text: &str,
-) -> ActionResult {
+pub async fn execute_action_anthropic(action_id: &str, extracted_text: &str) -> ActionResult {
     let start = std::time::Instant::now();
 
     // 1. Pre-flight: redact sensitive data before sending to cloud
@@ -103,7 +100,11 @@ pub async fn execute_action_anthropic(
 
     // 2. Build the action-specific user message
     let user_message = prompts_execute::build_execute_message(action_id, clean_text, "macos");
-    log::info!("[EXECUTE] Action: {}, text length: {}", action_id, clean_text.len());
+    log::info!(
+        "[EXECUTE] Action: {}, text length: {}",
+        action_id,
+        clean_text.len()
+    );
 
     // 3. Call Claude API (non-streaming, accumulate full response)
     let api_key = match std::env::var("ANTHROPIC_API_KEY") {
@@ -113,7 +114,10 @@ pub async fn execute_action_anthropic(
         }
         _ => {
             eprintln!("[EXECUTE] ERROR: No API key");
-            return ActionResult::error(action_id, "No API key configured. Add your Anthropic API key in Settings.");
+            return ActionResult::error(
+                action_id,
+                "No API key configured. Add your Anthropic API key in Settings.",
+            );
         }
     };
 
@@ -152,8 +156,16 @@ pub async fn execute_action_anthropic(
     };
 
     if !status_code.is_success() {
-        eprintln!("[EXECUTE] API error {}: {}", status_code, &body[..500.min(body.len())]);
-        log::error!("[EXECUTE] API returned {}: {}", status_code, &body[..200.min(body.len())]);
+        eprintln!(
+            "[EXECUTE] API error {}: {}",
+            status_code,
+            &body[..500.min(body.len())]
+        );
+        log::error!(
+            "[EXECUTE] API returned {}: {}",
+            status_code,
+            &body[..200.min(body.len())]
+        );
         return ActionResult::error(action_id, &format!("API error ({})", status_code));
     }
 
@@ -176,10 +188,16 @@ pub async fn execute_action_anthropic(
     let json_text = streaming::strip_code_fences(&response_text);
 
     // 5. Parse as ActionResult — try full parse, then repair truncated JSON
-    eprintln!("[EXECUTE] JSON to parse: {}", &json_text[..500.min(json_text.len())]);
+    eprintln!(
+        "[EXECUTE] JSON to parse: {}",
+        &json_text[..500.min(json_text.len())]
+    );
     let result = match serde_json::from_str::<ActionResult>(&json_text) {
         Ok(r) => {
-            eprintln!("[EXECUTE] SUCCESS: status={}, type={}", r.status, r.result.result_type);
+            eprintln!(
+                "[EXECUTE] SUCCESS: status={}, type={}",
+                r.status, r.result.result_type
+            );
             r
         }
         Err(e) => {
@@ -187,13 +205,26 @@ pub async fn execute_action_anthropic(
             // Try to salvage truncated JSON by extracting the "text" field
             match salvage_text_from_json(&json_text, action_id) {
                 Some(r) => {
-                    eprintln!("[EXECUTE] SALVAGED: status={}, type={}", r.status, r.result.result_type);
+                    eprintln!(
+                        "[EXECUTE] SALVAGED: status={}, type={}",
+                        r.status, r.result.result_type
+                    );
                     r
                 }
                 None => {
-                    eprintln!("[EXECUTE] SALVAGE FAILED — raw: {}", &json_text[..500.min(json_text.len())]);
-                    log::error!("[EXECUTE] JSON parse failed: {} — raw: {}", e, &json_text[..200.min(json_text.len())]);
-                    return ActionResult::error(action_id, &format!("Failed to parse action result: {}", e));
+                    eprintln!(
+                        "[EXECUTE] SALVAGE FAILED — raw: {}",
+                        &json_text[..500.min(json_text.len())]
+                    );
+                    log::error!(
+                        "[EXECUTE] JSON parse failed: {} — raw: {}",
+                        e,
+                        &json_text[..200.min(json_text.len())]
+                    );
+                    return ActionResult::error(
+                        action_id,
+                        &format!("Failed to parse action result: {}", e),
+                    );
                 }
             }
         }
@@ -210,12 +241,11 @@ pub async fn execute_action_anthropic(
         if let Some(ref cmd) = result.result.command {
             let check = safety::command_check::is_command_safe(cmd);
             if !check.safe {
-                let reason = check.reason.unwrap_or_else(|| "Unknown safety concern".to_string());
+                let reason = check
+                    .reason
+                    .unwrap_or_else(|| "Unknown safety concern".to_string());
                 log::warn!("[EXECUTE] Command blocked by safety layer: {}", reason);
-                return ActionResult::error(
-                    action_id,
-                    &format!("Command blocked: {}", reason),
-                );
+                return ActionResult::error(action_id, &format!("Command blocked: {}", reason));
             }
         }
     }
@@ -275,9 +305,9 @@ fn extract_json_string_field(json: &str, key: &str) -> Option<String> {
         let key_pos = json[search_from..].find(&pattern)?;
         let abs_pos = search_from + key_pos;
         let after_key = json[abs_pos + pattern.len()..].trim_start();
-        if after_key.starts_with(':') {
+        if let Some(rest) = after_key.strip_prefix(':') {
             // This is a key — extract the value
-            let after_colon = after_key[1..].trim_start();
+            let after_colon = rest.trim_start();
             if !after_colon.starts_with('"') {
                 return None;
             }

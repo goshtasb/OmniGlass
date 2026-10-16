@@ -34,13 +34,20 @@ pub async fn process_snip(
         .join("omni-glass-debug.log");
     fn diag_write(path: &std::path::Path, msg: &str) {
         use std::io::Write;
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+        {
             let _ = writeln!(f, "{}", msg);
         }
     }
     // Clear old log and start fresh
     let _ = std::fs::write(&diag_path, "");
-    diag_write(&diag_path, &format!("=== SNIP: {}x{} at ({},{}) ===", width, height, x, y));
+    diag_write(
+        &diag_path,
+        &format!("=== SNIP: {}x{} at ({},{}) ===", width, height, x, y),
+    );
 
     // Stage 2a: Crop the stored screenshot
     let cropped = {
@@ -55,7 +62,10 @@ pub async fn process_snip(
     diag_write(&diag_path, &format!("crop: {}ms", crop_ms));
     log::info!(
         "[CAPTURE] Bounding box received: {{x: {}, y: {}, w: {}, h: {}}}",
-        x, y, width, height
+        x,
+        y,
+        width,
+        height
     );
     log::info!("[CAPTURE] Region crop: {}ms", crop_ms);
 
@@ -69,7 +79,11 @@ pub async fn process_snip(
         )
         .map_err(|e| format!("PNG encode failed: {}", e))?;
     let encode_ms = encode_start.elapsed().as_millis();
-    log::info!("[CAPTURE] PNG encode: {}ms ({} bytes)", encode_ms, png_bytes.len());
+    log::info!(
+        "[CAPTURE] PNG encode: {}ms ({} bytes)",
+        encode_ms,
+        png_bytes.len()
+    );
 
     // Stage 2c: OCR — bytes passed directly, no temp file
     let ocr_start = std::time::Instant::now();
@@ -80,17 +94,33 @@ pub async fn process_snip(
     let png_bytes_for_reocr = png_bytes.clone();
     let ocr_result = ocr::recognize_text_from_bytes(png_bytes, ocr_level);
     let ocr_ms = ocr_start.elapsed().as_millis();
-    diag_write(&diag_path, &format!("ocr: {} chars in {}ms, confidence={:.2}", ocr_result.char_count, ocr_ms, ocr_result.confidence));
+    diag_write(
+        &diag_path,
+        &format!(
+            "ocr: {} chars in {}ms, confidence={:.2}",
+            ocr_result.char_count, ocr_ms, ocr_result.confidence
+        ),
+    );
     if ocr_result.char_count == 0 {
         diag_write(&diag_path, "WARNING: OCR returned ZERO characters!");
     } else {
-        diag_write(&diag_path, &format!("ocr_preview: {:?}", &ocr_result.text[..ocr_result.text.len().min(200)]));
+        diag_write(
+            &diag_path,
+            &format!(
+                "ocr_preview: {:?}",
+                &ocr_result.text[..ocr_result.text.len().min(200)]
+            ),
+        );
     }
-    eprintln!("[PIPELINE] OCR: {} chars in {}ms, confidence={:.2}", ocr_result.char_count, ocr_ms, ocr_result.confidence);
+    eprintln!(
+        "[PIPELINE] OCR: {} chars in {}ms, confidence={:.2}",
+        ocr_result.char_count, ocr_ms, ocr_result.confidence
+    );
     log::info!("[OCR] Recognition level: {:?}", ocr_level);
     log::info!(
         "[OCR] Extracted {} chars in {}ms",
-        ocr_result.char_count, ocr_ms
+        ocr_result.char_count,
+        ocr_ms
     );
 
     // Stage 2d: Content structure heuristics
@@ -139,25 +169,56 @@ pub async fn process_snip(
     log::info!("[RENDER] Skeleton menu window created in {}ms", render_ms);
     log::info!(
         "[PIPELINE] Local processing: {}ms (crop={} + encode={} + ocr={} + window={})",
-        local_ms, crop_ms, encode_ms, ocr_ms, render_ms
+        local_ms,
+        crop_ms,
+        encode_ms,
+        ocr_ms,
+        render_ms
     );
 
     // Stage 4: Stream LLM classify — emits events to the action menu window.
     // Get plugin tool descriptions so the LLM knows about installed plugins.
     let registry = app.state::<mcp::ToolRegistry>();
     let all_tools = registry.all_tools().await;
-    let plugin_count = all_tools.iter().filter(|t| t.plugin_id != "builtin").count();
+    let plugin_count = all_tools
+        .iter()
+        .filter(|t| t.plugin_id != "builtin")
+        .count();
     let plugin_tools = registry.tools_for_prompt().await;
-    diag_write(&diag_path, &format!("registry: {} total tools, {} plugin tools", all_tools.len(), plugin_count));
+    diag_write(
+        &diag_path,
+        &format!(
+            "registry: {} total tools, {} plugin tools",
+            all_tools.len(),
+            plugin_count
+        ),
+    );
 
     let provider = resolve_provider();
     diag_write(&diag_path, &format!("provider: {}", provider));
-    diag_write(&diag_path, &format!("ANTHROPIC_API_KEY present: {}", std::env::var("ANTHROPIC_API_KEY").map(|k| !k.is_empty()).unwrap_or(false)));
-    diag_write(&diag_path, &format!("LLM_PROVIDER env: {:?}", std::env::var("LLM_PROVIDER").ok()));
+    diag_write(
+        &diag_path,
+        &format!(
+            "ANTHROPIC_API_KEY present: {}",
+            std::env::var("ANTHROPIC_API_KEY")
+                .map(|k| !k.is_empty())
+                .unwrap_or(false)
+        ),
+    );
+    diag_write(
+        &diag_path,
+        &format!("LLM_PROVIDER env: {:?}", std::env::var("LLM_PROVIDER").ok()),
+    );
     if !plugin_tools.is_empty() {
-        diag_write(&diag_path, &format!("plugin_tools_for_prompt:\n{}", plugin_tools.trim()));
+        diag_write(
+            &diag_path,
+            &format!("plugin_tools_for_prompt:\n{}", plugin_tools.trim()),
+        );
     } else {
-        diag_write(&diag_path, "plugin_tools_for_prompt: EMPTY (no plugins or not loaded yet)");
+        diag_write(
+            &diag_path,
+            "plugin_tools_for_prompt: EMPTY (no plugins or not loaded yet)",
+        );
     }
     eprintln!("[PIPELINE] LLM provider: {}", provider);
     let action_menu = match provider.as_str() {
@@ -200,10 +261,22 @@ pub async fn process_snip(
     };
 
     // Log classify result to diagnostics
-    diag_write(&diag_path, &format!("classify_result: content_type={}, summary={}", action_menu.content_type, action_menu.summary));
-    diag_write(&diag_path, &format!("actions: {}", action_menu.actions.len()));
+    diag_write(
+        &diag_path,
+        &format!(
+            "classify_result: content_type={}, summary={}",
+            action_menu.content_type, action_menu.summary
+        ),
+    );
+    diag_write(
+        &diag_path,
+        &format!("actions: {}", action_menu.actions.len()),
+    );
     for a in &action_menu.actions {
-        diag_write(&diag_path, &format!("  #{} {} ({})", a.priority, a.label, a.id));
+        diag_write(
+            &diag_path,
+            &format!("  #{} {} ({})", a.priority, a.label, a.id),
+        );
     }
     let diag_ms = pipeline_start.elapsed().as_millis();
     diag_write(&diag_path, &format!("total_pipeline: {}ms", diag_ms));
@@ -280,14 +353,14 @@ pub async fn execute_action(
         match crop_png {
             Some(png_bytes) => {
                 let start = std::time::Instant::now();
-                let result = ocr::recognize_text_from_bytes(
-                    png_bytes,
-                    ocr::RecognitionLevel::Accurate,
-                );
+                let result =
+                    ocr::recognize_text_from_bytes(png_bytes, ocr::RecognitionLevel::Accurate);
                 let ms = start.elapsed().as_millis();
                 eprintln!(
                     "[EXECUTE] Re-OCR (.accurate): {} chars in {}ms (was {} chars with .fast)",
-                    result.char_count, ms, fast_text.len()
+                    result.char_count,
+                    ms,
+                    fast_text.len()
                 );
                 result.text
             }

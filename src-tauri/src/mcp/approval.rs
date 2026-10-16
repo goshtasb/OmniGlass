@@ -69,8 +69,7 @@ pub fn save_approvals(store: &ApprovalStore) -> Result<(), String> {
     }
     let json = serde_json::to_string_pretty(store)
         .map_err(|e| format!("Failed to serialize approvals: {}", e))?;
-    std::fs::write(&path, json)
-        .map_err(|e| format!("Failed to write {}: {}", path.display(), e))
+    std::fs::write(&path, json).map_err(|e| format!("Failed to write {}: {}", path.display(), e))
 }
 
 /// Check whether a plugin is approved, denied, or needs a prompt.
@@ -153,7 +152,10 @@ mod tests {
     fn new_plugin_needs_approval() {
         let store = ApprovalStore::default();
         let manifest = test_manifest(Permissions::default());
-        assert_eq!(check_approval(&store, &manifest), ApprovalStatus::NeedsApproval);
+        assert_eq!(
+            check_approval(&store, &manifest),
+            ApprovalStatus::NeedsApproval
+        );
     }
 
     #[test]
@@ -191,7 +193,10 @@ mod tests {
 
     #[test]
     fn hash_is_stable() {
-        let perms = Permissions { clipboard: true, ..Default::default() };
+        let perms = Permissions {
+            clipboard: true,
+            ..Default::default()
+        };
         let h1 = hash_permissions(&perms);
         let h2 = hash_permissions(&perms);
         assert_eq!(h1, h2);

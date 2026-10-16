@@ -220,12 +220,7 @@ fn generate_sync(
         // Prepare next batch — position is prompt_len + n_decoded (0-indexed)
         batch.clear();
         batch
-            .add(
-                token,
-                (prompt_len + n_decoded as usize) as i32,
-                &[0],
-                true,
-            )
+            .add(token, (prompt_len + n_decoded as usize) as i32, &[0], true)
             .map_err(|e| format!("Batch add failed: {:?}", e))?;
         ctx.decode(&mut batch)
             .map_err(|e| format!("Decode failed: {:?}", e))?;

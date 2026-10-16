@@ -23,10 +23,7 @@ pub struct RuntimePaths {
 /// Build a sandbox-exec `.sb` profile from manifest permissions.
 /// Default-deny, broad system reads, wall off /Users, then selectively
 /// re-allow runtime prefix, plugin dir, and declared paths.
-pub fn generate_profile(
-    manifest: &PluginManifest,
-    plugin_dir: &Path,
-) -> Result<String, String> {
+pub fn generate_profile(manifest: &PluginManifest, plugin_dir: &Path) -> Result<String, String> {
     let runtime_paths = find_runtime_paths(&manifest.runtime)?;
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("/tmp"));
     let home_str = home.to_string_lossy();
@@ -59,13 +56,15 @@ pub fn generate_profile(
     let prefix_str = runtime_paths.prefix.to_string_lossy();
     if !prefix_str.is_empty() {
         profile.push_str(&format!(
-            "(allow file-read* (subpath \"{}\"))\n\n", prefix_str
+            "(allow file-read* (subpath \"{}\"))\n\n",
+            prefix_str
         ));
     }
 
     profile.push_str(";; Re-allow: plugin directory\n");
     profile.push_str(&format!(
-        "(allow file-read* (subpath \"{}\"))\n\n", plugin_dir_str
+        "(allow file-read* (subpath \"{}\"))\n\n",
+        plugin_dir_str
     ));
 
     // ── Layer 4b: plugin config directory ──
@@ -110,7 +109,7 @@ pub fn generate_profile(
             profile.push_str(
                 ";; Network (coarse: domain filtering not possible)\n\
                  (allow network-outbound)\n(allow network-inbound)\n\
-                 (allow network* (local ip \"localhost:*\"))\n\n"
+                 (allow network* (local ip \"localhost:*\"))\n\n",
             );
         }
     }
@@ -129,9 +128,7 @@ pub fn generate_profile(
                     ));
                 }
                 "read" => {
-                    profile.push_str(&format!(
-                        "(allow file-read* (subpath \"{}\"))\n", expanded
-                    ));
+                    profile.push_str(&format!("(allow file-read* (subpath \"{}\"))\n", expanded));
                 }
                 _ => {}
             }
@@ -145,9 +142,7 @@ pub fn generate_profile(
         profile.push_str("(allow process-fork)\n");
         profile.push_str("(allow process-exec (literal \"/bin/sh\"))\n");
         profile.push_str("(allow process-exec (literal \"/bin/bash\"))\n");
-        profile.push_str(&format!(
-            "(allow file-write* (subpath \"{}\"))\n", tmp_dir
-        ));
+        profile.push_str(&format!("(allow file-write* (subpath \"{}\"))\n", tmp_dir));
         for cmd in &shell.commands {
             if let Ok(cmd_path) = which::which(cmd) {
                 profile.push_str(&format!(
@@ -176,9 +171,10 @@ pub fn write_profile(plugin_id: &str, profile: &str) -> Result<PathBuf, String> 
 pub fn find_runtime_paths(runtime: &Runtime) -> Result<RuntimePaths, String> {
     match runtime {
         Runtime::Node => {
-            let binary = which::which("node")
-                .map_err(|_| "Node.js not found in PATH".to_string())?;
-            let prefix = binary.parent()
+            let binary =
+                which::which("node").map_err(|_| "Node.js not found in PATH".to_string())?;
+            let prefix = binary
+                .parent()
                 .and_then(|bin| bin.parent())
                 .unwrap_or(binary.parent().unwrap_or(Path::new("")))
                 .to_path_buf();
@@ -188,18 +184,17 @@ pub fn find_runtime_paths(runtime: &Runtime) -> Result<RuntimePaths, String> {
             let binary = which::which("python3")
                 .or_else(|_| which::which("python"))
                 .map_err(|_| "Python not found in PATH".to_string())?;
-            let prefix = binary.parent()
+            let prefix = binary
+                .parent()
                 .and_then(|bin| bin.parent())
                 .unwrap_or(binary.parent().unwrap_or(Path::new("")))
                 .to_path_buf();
             Ok(RuntimePaths { binary, prefix })
         }
-        Runtime::Binary => {
-            Ok(RuntimePaths {
-                binary: PathBuf::new(),
-                prefix: PathBuf::new(),
-            })
-        }
+        Runtime::Binary => Ok(RuntimePaths {
+            binary: PathBuf::new(),
+            prefix: PathBuf::new(),
+        }),
     }
 }
 
@@ -239,7 +234,9 @@ mod tests {
         let _ = std::fs::create_dir_all(&dir);
         let profile = generate_profile(&manifest, &dir).unwrap();
         // Runtime prefix should appear after the /Users deny
-        let users_deny_pos = profile.find("deny file-read* (subpath \"/Users\")").unwrap();
+        let users_deny_pos = profile
+            .find("deny file-read* (subpath \"/Users\")")
+            .unwrap();
         let re_allow_pos = profile.find("Re-allow: runtime prefix").unwrap();
         assert!(re_allow_pos > users_deny_pos);
     }
@@ -275,8 +272,14 @@ mod tests {
     fn declared_fs_overrides_users_deny() {
         let manifest = test_manifest(Permissions {
             filesystem: Some(vec![
-                FsPerm { path: "~/Documents".into(), access: "read".into() },
-                FsPerm { path: "/tmp/test-write".into(), access: "write".into() },
+                FsPerm {
+                    path: "~/Documents".into(),
+                    access: "read".into(),
+                },
+                FsPerm {
+                    path: "/tmp/test-write".into(),
+                    access: "write".into(),
+                },
             ]),
             ..Default::default()
         });

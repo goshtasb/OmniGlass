@@ -102,8 +102,13 @@ pub fn load_manifest(plugin_dir: &Path) -> Result<PluginManifest, String> {
     let raw = std::fs::read_to_string(&manifest_path)
         .map_err(|e| format!("Failed to read {}: {}", manifest_path.display(), e))?;
 
-    let manifest: PluginManifest = serde_json::from_str(&raw)
-        .map_err(|e| format!("Invalid manifest JSON in {}: {}", manifest_path.display(), e))?;
+    let manifest: PluginManifest = serde_json::from_str(&raw).map_err(|e| {
+        format!(
+            "Invalid manifest JSON in {}: {}",
+            manifest_path.display(),
+            e
+        )
+    })?;
 
     validate(&manifest, plugin_dir)?;
     Ok(manifest)
@@ -282,13 +287,17 @@ mod tests {
     fn manifest_with_configuration_loads() {
         let dir = std::env::temp_dir().join("og-test-config-field");
         let _ = fs::remove_dir_all(&dir);
-        setup_test_plugin(&dir, r#"{
+        setup_test_plugin(
+            &dir,
+            r#"{
             "id": "com.example.configured", "name": "Cfg", "version": "1.0.0",
             "runtime": "node", "entry": "index.js",
             "configuration": {
                 "repo": {"type": "string", "label": "Repo", "placeholder": "owner/repo"}
             }
-        }"#, "index.js");
+        }"#,
+            "index.js",
+        );
         let m = load_manifest(&dir).unwrap();
         let cfg = m.configuration.unwrap();
         let f = cfg.get("repo").unwrap();

@@ -74,11 +74,7 @@ pub async fn execute_plugin_tool(
             let cmd_check = command_check::is_command_safe(&raw_text);
             if !cmd_check.safe {
                 let reason = cmd_check.reason.unwrap_or_else(|| "blocked pattern".into());
-                log::warn!(
-                    "[SAFETY] Plugin '{}' output blocked: {}",
-                    action_id,
-                    reason
-                );
+                log::warn!("[SAFETY] Plugin '{}' output blocked: {}", action_id, reason);
                 return ActionResult::error(
                     action_id,
                     &format!("Plugin output blocked by safety filter: {}", reason),
@@ -88,7 +84,9 @@ pub async fn execute_plugin_tool(
             // Safety gate 2: redact PII / secrets from plugin output
             let redaction = redact::redact_sensitive_data(&raw_text);
             if !redaction.redactions.is_empty() {
-                let labels: Vec<&str> = redaction.redactions.iter()
+                let labels: Vec<&str> = redaction
+                    .redactions
+                    .iter()
                     .map(|r| r.label.as_str())
                     .collect();
                 log::info!(
@@ -142,11 +140,6 @@ async fn generate_args_for_provider(
         }
     }
 
-    crate::llm::plugin_args::generate_plugin_args(
-        action_id,
-        tool_description,
-        schema,
-        input_text,
-    )
-    .await
+    crate::llm::plugin_args::generate_plugin_args(action_id, tool_description, schema, input_text)
+        .await
 }

@@ -25,6 +25,12 @@ impl PendingApprovals {
     }
 }
 
+impl Default for PendingApprovals {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Default plugin directory: ~/.config/omni-glass/plugins/
 fn plugins_dir() -> Option<PathBuf> {
     dirs::config_dir().map(|c| c.join("omni-glass").join("plugins"))
@@ -191,9 +197,18 @@ fn spawn_plugin(
         match macos::generate_profile(manifest, plugin_dir) {
             Ok(profile) => {
                 let profile_path = macos::write_profile(plugin_id, &profile)?;
-                log::info!("[SANDBOX] Profile written for '{}': {}", plugin_id, profile_path.display());
+                log::info!(
+                    "[SANDBOX] Profile written for '{}': {}",
+                    plugin_id,
+                    profile_path.display()
+                );
                 return McpServer::spawn_sandboxed(
-                    plugin_id, command, args, env, &profile_path, plugin_dir,
+                    plugin_id,
+                    command,
+                    args,
+                    env,
+                    &profile_path,
+                    plugin_dir,
                 );
             }
             Err(e) => {

@@ -38,12 +38,12 @@ pub fn build_local_classify_prompt(
     has_code: bool,
     plugin_tools: &str,
 ) -> String {
-    let user_content = build_classify_user_content(text, confidence, has_table, has_code, plugin_tools);
+    let user_content =
+        build_classify_user_content(text, confidence, has_table, has_code, plugin_tools);
 
     format!(
         "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-        LOCAL_CLASSIFY_SYSTEM,
-        user_content,
+        LOCAL_CLASSIFY_SYSTEM, user_content,
     )
 }
 
@@ -106,7 +106,8 @@ mod tests {
 
     #[test]
     fn classify_prompt_includes_plugin_tools() {
-        let prompt = build_local_classify_prompt("text", 0.9, false, false, "- Create Issue: files bugs");
+        let prompt =
+            build_local_classify_prompt("text", 0.9, false, false, "- Create Issue: files bugs");
         assert!(prompt.contains("Create Issue"));
         assert!(prompt.contains("plugin actions"));
     }

@@ -29,8 +29,8 @@ pub async fn generate_plugin_args(
     input_schema: &serde_json::Value,
     extracted_text: &str,
 ) -> Result<serde_json::Value, String> {
-    let api_key = std::env::var("ANTHROPIC_API_KEY")
-        .map_err(|_| "No API key configured".to_string())?;
+    let api_key =
+        std::env::var("ANTHROPIC_API_KEY").map_err(|_| "No API key configured".to_string())?;
     if api_key.is_empty() {
         return Err("No API key configured".to_string());
     }

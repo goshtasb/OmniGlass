@@ -184,7 +184,11 @@ async fn auto_load_local_model(app: &tauri::AppHandle) {
     };
 
     let path = model_manager::model_path(model);
-    eprintln!("[LOCAL_LLM] Auto-loading model: {} from {}", model.id, path.display());
+    eprintln!(
+        "[LOCAL_LLM] Auto-loading model: {} from {}",
+        model.id,
+        path.display()
+    );
 
     let state = app.state::<llm::local_state::LocalLlmState>();
     match state.load(&path, model.id).await {

@@ -47,7 +47,10 @@ req.setTimeout(5000, () => { process.exit(1); });
 
     let env = env_filter::filter_environment(&manifest.permissions, &manifest.id);
     let (code, _, _) = run_sandboxed(&profile_path, &script, env);
-    assert_ne!(code, 0, "Network request should fail without network permission");
+    assert_ne!(
+        code, 0,
+        "Network request should fail without network permission"
+    );
 }
 
 // ── Test 2: With network can connect ───────────────────────────────

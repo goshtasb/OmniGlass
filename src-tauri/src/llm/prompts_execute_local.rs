@@ -20,11 +20,7 @@ You MUST use this exact JSON format:
 pub const LOCAL_EXECUTE_MAX_TOKENS: u32 = 1024;
 
 /// Build a ChatML-formatted EXECUTE prompt for the local model.
-pub fn build_local_execute_prompt(
-    action_id: &str,
-    extracted_text: &str,
-    platform: &str,
-) -> String {
+pub fn build_local_execute_prompt(action_id: &str, extracted_text: &str, platform: &str) -> String {
     let action_instruction = match action_id {
         "explain_error" | "explain_script" | "explain_code" => {
             "Explain this error: what it means, why it occurred, and the most common cause. Result type: text."
@@ -55,8 +51,7 @@ pub fn build_local_execute_prompt(
 
     format!(
         "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-        LOCAL_EXECUTE_SYSTEM,
-        user_content,
+        LOCAL_EXECUTE_SYSTEM, user_content,
     )
 }
 
@@ -98,16 +93,12 @@ pub fn build_local_args_prompt(
 
     format!(
         "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-        system,
-        user_content,
+        system, user_content,
     )
 }
 
 /// Build a ChatML-formatted prompt for text launcher routing.
-pub fn build_local_text_command_prompt(
-    user_text: &str,
-    tools_prompt: &str,
-) -> String {
+pub fn build_local_text_command_prompt(user_text: &str, tools_prompt: &str) -> String {
     let system = r#"You are a command router. Given user text and available tools, decide: respond directly or route to a tool.
 
 If responding directly: {"type": "direct", "text": "your response"}
@@ -115,14 +106,11 @@ If routing to a tool: {"type": "tool", "tool_id": "tool_name", "input_text": "te
 
 Respond with ONLY valid JSON."#;
 
-    let user_content = format!(
-        "Available tools:\n{tools_prompt}\n\nUser request:\n{user_text}"
-    );
+    let user_content = format!("Available tools:\n{tools_prompt}\n\nUser request:\n{user_text}");
 
     format!(
         "<|im_start|>system\n{}<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n",
-        system,
-        user_content,
+        system, user_content,
     )
 }
 
@@ -147,7 +135,8 @@ mod tests {
 
     #[test]
     fn args_prompt_includes_schema() {
-        let prompt = build_local_args_prompt("create_issue", "Creates a GitHub issue", "{}", "error text");
+        let prompt =
+            build_local_args_prompt("create_issue", "Creates a GitHub issue", "{}", "error text");
         assert!(prompt.contains("create_issue"));
         assert!(prompt.contains("error text"));
     }

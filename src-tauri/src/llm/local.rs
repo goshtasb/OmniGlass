@@ -39,7 +39,11 @@ pub async fn classify_local(
     );
 
     let prompt = prompts_local::build_local_classify_prompt(
-        text, confidence, has_table, has_code, plugin_tools,
+        text,
+        confidence,
+        has_table,
+        has_code,
+        plugin_tools,
     );
 
     // Grammar disabled — llama-cpp-2 v0.1.135 GBNF crashes (SIGABRT).
@@ -49,22 +53,24 @@ pub async fn classify_local(
         .await;
 
     let menu = match result {
-        Ok(raw) => {
-            match extract_and_parse::<ActionMenu>(&raw) {
-                Ok(menu) => {
-                    log::info!(
-                        "[LOCAL_CLASSIFY] Success: {} actions in {}ms",
-                        menu.actions.len(),
-                        start.elapsed().as_millis()
-                    );
-                    menu
-                }
-                Err(e) => {
-                    log::warn!("[LOCAL_CLASSIFY] Parse failed: {} — raw: {}", e, &raw[..200.min(raw.len())]);
-                    fallback_menu(text)
-                }
+        Ok(raw) => match extract_and_parse::<ActionMenu>(&raw) {
+            Ok(menu) => {
+                log::info!(
+                    "[LOCAL_CLASSIFY] Success: {} actions in {}ms",
+                    menu.actions.len(),
+                    start.elapsed().as_millis()
+                );
+                menu
             }
-        }
+            Err(e) => {
+                log::warn!(
+                    "[LOCAL_CLASSIFY] Parse failed: {} — raw: {}",
+                    e,
+                    &raw[..200.min(raw.len())]
+                );
+                fallback_menu(text)
+            }
+        },
         Err(e) => {
             log::error!("[LOCAL_CLASSIFY] Generation failed: {}", e);
             fallback_menu(text)
@@ -86,15 +92,22 @@ pub async fn execute_action_local(
     state: &LocalLlmState,
 ) -> ActionResult {
     let start = std::time::Instant::now();
-    log::info!("[LOCAL_EXECUTE] Action: {}, text length: {}", action_id, extracted_text.len());
-
-    let prompt = prompts_execute_local::build_local_execute_prompt(
-        action_id, extracted_text, "macos",
+    log::info!(
+        "[LOCAL_EXECUTE] Action: {}, text length: {}",
+        action_id,
+        extracted_text.len()
     );
+
+    let prompt =
+        prompts_execute_local::build_local_execute_prompt(action_id, extracted_text, "macos");
 
     // Grammar disabled — see module-level note.
     let result = state
-        .generate(&prompt, prompts_execute_local::LOCAL_EXECUTE_MAX_TOKENS, None)
+        .generate(
+            &prompt,
+            prompts_execute_local::LOCAL_EXECUTE_MAX_TOKENS,
+            None,
+        )
         .await;
 
     match result {
@@ -111,7 +124,10 @@ pub async fn execute_action_local(
                 Err(e) => {
                     // Local models often return flat JSON instead of nested ActionResult.
                     // Try to salvage fields from the flat structure.
-                    log::warn!("[LOCAL_EXECUTE] Structured parse failed: {} — trying flat JSON", e);
+                    log::warn!(
+                        "[LOCAL_EXECUTE] Structured parse failed: {} — trying flat JSON",
+                        e
+                    );
                     salvage_flat_result(action_id, &raw)
                 }
             }
@@ -135,7 +151,10 @@ pub async fn generate_plugin_args_local(
 ) -> Result<serde_json::Value, String> {
     let schema_str = serde_json::to_string_pretty(input_schema).unwrap_or_default();
     let prompt = prompts_execute_local::build_local_args_prompt(
-        tool_name, tool_description, &schema_str, extracted_text,
+        tool_name,
+        tool_description,
+        &schema_str,
+        extracted_text,
     );
 
     // No strict grammar for args — schemas vary per plugin.
@@ -178,8 +197,7 @@ fn extract_and_parse<T: serde::de::DeserializeOwned>(raw: &str) -> Result<T, Str
     }
     // Try to find outermost { ... } in the text
     let json_str = extract_json_str(&clean);
-    serde_json::from_str::<T>(json_str)
-        .map_err(|e| format!("JSON extraction failed: {}", e))
+    serde_json::from_str::<T>(json_str).map_err(|e| format!("JSON extraction failed: {}", e))
 }
 
 /// Find the outermost `{...}` in a string (brace-balanced extraction).
@@ -221,7 +239,10 @@ fn salvage_flat_result(action_id: &str, raw: &str) -> ActionResult {
     let json_str = extract_json_str(&clean);
 
     if let Ok(v) = serde_json::from_str::<serde_json::Value>(json_str) {
-        let status = v.get("status").and_then(|s| s.as_str()).unwrap_or("success");
+        let status = v
+            .get("status")
+            .and_then(|s| s.as_str())
+            .unwrap_or("success");
         let command = v.get("command").and_then(|s| s.as_str());
         let text = v.get("text").and_then(|s| s.as_str());
         let result_type = v.get("type").and_then(|s| s.as_str());
@@ -253,9 +274,15 @@ fn salvage_flat_result(action_id: &str, raw: &str) -> ActionResult {
                 result: super::execute::ActionResultBody {
                     result_type: rt.to_string(),
                     text: text.map(|t| t.to_string()),
-                    file_path: v.get("filePath").and_then(|s| s.as_str()).map(|s| s.to_string()),
+                    file_path: v
+                        .get("filePath")
+                        .and_then(|s| s.as_str())
+                        .map(|s| s.to_string()),
                     command: None,
-                    clipboard_content: v.get("clipboardContent").and_then(|s| s.as_str()).map(|s| s.to_string()),
+                    clipboard_content: v
+                        .get("clipboardContent")
+                        .and_then(|s| s.as_str())
+                        .map(|s| s.to_string()),
                     mime_type: None,
                 },
                 metadata: None,
